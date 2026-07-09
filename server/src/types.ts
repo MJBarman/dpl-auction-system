@@ -78,6 +78,8 @@ export interface Bid {
 }
 
 export interface Lot {
+  id: string;      // unique per opened lot — bids must quote it so a stale
+                   // client can never bid on a player it isn't looking at
   playerId: string;
   bids: Bid[];
   openedAt: number;

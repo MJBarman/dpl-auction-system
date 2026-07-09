@@ -188,8 +188,9 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       throw new AuctionError('Bidding from captain devices is disabled — call your bid out to the auctioneer');
     }
     const amount = optionalInt(req.body?.amount, 'Bid amount', { min: 1 });
+    const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
     mutate(null, 'bid', () => {
-      engine.placeBid(store.state, teamId, amount ?? undefined, 'team', Date.now());
+      engine.placeBid(store.state, teamId, amount ?? undefined, 'team', Date.now(), lotId);
     }, () => {
       const lot = store.state.lot!;
       const bid = lot.bids[lot.bids.length - 1];
@@ -407,8 +408,9 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   router.post('/admin/auction/bid', requireAdmin, (req, res) => {
     const teamId = str(req.body?.teamId, 'Team');
     const amount = optionalInt(req.body?.amount, 'Bid amount', { min: 1 });
+    const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
     mutate(null, 'bid', () => {
-      engine.placeBid(store.state, teamId, amount ?? undefined, 'admin', Date.now());
+      engine.placeBid(store.state, teamId, amount ?? undefined, 'admin', Date.now(), lotId);
     }, () => {
       const lot = store.state.lot!;
       const bid = lot.bids[lot.bids.length - 1];
@@ -422,14 +424,20 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ ok: true });
   });
 
-  router.post('/admin/auction/sold', requireAdmin, (_req, res) => {
-    const result = mutate('Undo: sale', 'sale', () => engine.sellLot(store.state, Date.now()),
+  router.post('/admin/auction/sold', requireAdmin, (req, res) => {
+    const guard: engine.HammerGuard = {
+      lotId: req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined,
+      expectedTeamId: req.body?.expectedTeamId !== undefined ? str(req.body.expectedTeamId, 'Team') : undefined,
+      expectedPrice: optionalInt(req.body?.expectedPrice, 'Expected price', { min: 0 }) ?? undefined,
+    };
+    const result = mutate('Undo: sale', 'sale', () => engine.sellLot(store.state, Date.now(), guard),
       (r) => `SOLD — ${r.player.name} to ${teamName(r.teamId)} for ${r.price} pts`);
     res.json({ ok: true, playerId: result.player.id, teamId: result.teamId, price: result.price });
   });
 
-  router.post('/admin/auction/unsold', requireAdmin, (_req, res) => {
-    const player = mutate('Undo: unsold', 'sale', () => engine.passLot(store.state),
+  router.post('/admin/auction/unsold', requireAdmin, (req, res) => {
+    const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
+    const player = mutate('Undo: unsold', 'sale', () => engine.passLot(store.state, lotId),
       (p) => `UNSOLD — ${p.name} (no bids)`);
     res.json({ ok: true, playerId: player.id });
   });
@@ -504,7 +512,10 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
 
   router.post('/admin/factory-reset', requireAdmin, (req, res) => {
     if (req.body?.confirm !== true) throw new AuctionError('Pass confirm: true to factory-reset');
-    store.replaceState(buildInitialState());
+    const fresh = buildInitialState();
+    // Keep versions monotonic so clients never mistake the reset for stale state.
+    fresh.version = (store.state.version ?? 0) + 1;
+    store.replaceState(fresh);
     store.logEvent('system', 'Factory reset — restored the original DPL Season 4 seed');
     broadcast();
     res.json({ ok: true });

@@ -215,8 +215,10 @@ function BidPanel({ state }: { state: StateView }) {
   const [customTeam, setCustomTeam] = useState('');
   const [customAmount, setCustomAmount] = useState('');
 
+  // Every bid quotes the lot id and the exact amount shown on the button, so a
+  // tap can never land on a different player (or price) than the one on screen.
   const bid = (teamId: string, amount?: number) =>
-    run(() => api.post('/api/admin/auction/bid', { teamId, ...(amount ? { amount } : {}) }));
+    run(() => api.post('/api/admin/auction/bid', { teamId, lotId: lot.id, amount: amount ?? lot.nextMinBid }));
 
   return (
     <div className="card bid-panel">
@@ -270,7 +272,13 @@ function BidPanel({ state }: { state: StateView }) {
         <button
           className="btn ok big grow"
           disabled={!lot.leadingTeamId}
-          onClick={() => run(() => api.post('/api/admin/auction/sold'))}
+          onClick={() => run(() => api.post('/api/admin/auction/sold', {
+            // Hammer guard: sell exactly what is on this screen — if a bid
+            // slips in between glance and tap, the server rejects the hammer.
+            lotId: lot.id,
+            expectedTeamId: lot.leadingTeamId,
+            expectedPrice: lot.currentBid,
+          }))}
         >
           🔨 SOLD {lot.currentBid ? `· ${fmt(lot.currentBid)}` : ''}
         </button>
@@ -278,7 +286,7 @@ function BidPanel({ state }: { state: StateView }) {
           className="btn warn"
           disabled={lot.bids.length > 0}
           title={lot.bids.length > 0 ? 'There is a standing bid' : ''}
-          onClick={() => run(() => api.post('/api/admin/auction/unsold'))}
+          onClick={() => run(() => api.post('/api/admin/auction/unsold', { lotId: lot.id }))}
         >
           UNSOLD
         </button>

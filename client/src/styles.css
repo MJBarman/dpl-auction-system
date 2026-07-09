@@ -120,6 +120,12 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .conn-dot.off { color: #fca5a5; background: rgba(239, 68, 68, .15); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .5; } }
 
+.offline-banner {
+  background: #7f1d1d; color: #fee2e2; border-bottom: 1px solid #b91c1c;
+  padding: 8px 16px; text-align: center; font-weight: 700; font-size: 14px;
+  animation: pulse 1.6s infinite;
+}
+
 /* ---------- toasts & modal ---------- */
 .toast-stack { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; flex-direction: column; gap: 8px; width: min(480px, 92vw); }
 .toast { padding: 11px 14px; border-radius: 10px; font-weight: 600; animation: rise .18s ease-out; box-shadow: 0 8px 30px rgba(0,0,0,.45); }

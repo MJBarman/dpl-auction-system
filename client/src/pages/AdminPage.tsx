@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
-import { ConnectionDot } from '../ui';
+import { ConnectionDot, OfflineBanner } from '../ui';
 import AuctionConsole from '../admin/AuctionConsole';
 import LogTab from '../admin/LogTab';
 import PlayersTab from '../admin/PlayersTab';
@@ -63,6 +63,7 @@ export default function AdminPage() {
         </div>
       </header>
 
+      <OfflineBanner connected={connected} />
       {state.admin && state.admin.warnings.length > 0 && tab !== 'settings' && (
         <div className="warnings">
           {state.admin.warnings.map((w, i) => (

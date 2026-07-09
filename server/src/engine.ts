@@ -166,7 +166,23 @@ export function openLot(state: State, playerId: string, now: number): void {
     player.offeredInPass = true;
   }
   if (state.stage === 'live') state.currentTierKey = player.tierKey;
-  state.lot = { playerId, bids: [], openedAt: now, timerEndsAt: null };
+  state.lot = {
+    id: `lot-${now}-${randomInt(1_000_000)}`,
+    playerId, bids: [], openedAt: now, timerEndsAt: null,
+  };
+}
+
+/** Reject actions taken against a lot the client is no longer looking at. */
+function requireSameLot(state: State, lotId: string | undefined): Lot {
+  const lot = requireLot(state);
+  if (lotId !== undefined && lot.id !== lotId) {
+    const player = getPlayer(state, lot.playerId);
+    throw new AuctionError(
+      `Too late — that lot has closed. ${player.name} is up for auction now; check your screen and try again.`,
+      409,
+    );
+  }
+  return lot;
 }
 
 export interface BidCheck {
@@ -201,9 +217,10 @@ export function checkBid(state: State, teamId: string, amount: number): BidCheck
 
 export function placeBid(
   state: State, teamId: string, amount: number | undefined, by: 'admin' | 'team', now: number,
+  lotId?: string,
 ): void {
   requireLive(state);
-  const lot = requireLot(state);
+  const lot = requireSameLot(state, lotId);
   getTeam(state, teamId);
   const bidAmount = amount ?? nextMinBid(state);
   const check = checkBid(state, teamId, bidAmount);
@@ -219,11 +236,26 @@ export function undoBid(state: State): void {
   lot.timerEndsAt = null;
 }
 
-export function sellLot(state: State, now: number): { player: Player; teamId: string; price: number } {
+export interface HammerGuard {
+  lotId?: string;
+  /** Leading team/price the auctioneer saw when tapping SOLD — rejects the
+   *  hammer if another bid slipped in between glance and tap. */
+  expectedTeamId?: string;
+  expectedPrice?: number;
+}
+
+export function sellLot(state: State, now: number, guard: HammerGuard = {}): { player: Player; teamId: string; price: number } {
   requireLive(state);
-  const lot = requireLot(state);
+  const lot = requireSameLot(state, guard.lotId);
   const leading = lot.bids[lot.bids.length - 1];
   if (!leading) throw new AuctionError('No bids yet — mark the player UNSOLD instead');
+  if ((guard.expectedTeamId !== undefined && leading.teamId !== guard.expectedTeamId)
+    || (guard.expectedPrice !== undefined && leading.amount !== guard.expectedPrice)) {
+    throw new AuctionError(
+      `Hold on — a new bid just landed: ${getTeam(state, leading.teamId).name} now leads at ${leading.amount} pts. Check and hammer again.`,
+      409,
+    );
+  }
   const player = getPlayer(state, lot.playerId);
   player.status = 'sold';
   player.teamId = leading.teamId;
@@ -233,9 +265,9 @@ export function sellLot(state: State, now: number): { player: Player; teamId: st
   return { player, teamId: leading.teamId, price: leading.amount };
 }
 
-export function passLot(state: State): Player {
+export function passLot(state: State, lotId?: string): Player {
   requireLive(state);
-  const lot = requireLot(state);
+  const lot = requireSameLot(state, lotId);
   if (lot.bids.length > 0) {
     throw new AuctionError('There is a standing bid — SELL or undo the bid instead');
   }

@@ -5,7 +5,7 @@ import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { PlayerView, StateView, WatchlistEntry } from '../types';
 import {
-  ConnectionDot, fmt, Modal, PlayerBadges, StatsGrid, TierBadge, useAction, useCountdown,
+  ConnectionDot, fmt, Modal, OfflineBanner, PlayerBadges, StatsGrid, TierBadge, useAction, useCountdown,
 } from '../ui';
 
 export default function TeamPage() {
@@ -59,6 +59,7 @@ export default function TeamPage() {
         </div>
       </header>
 
+      <OfflineBanner connected={connected} />
       <MoneyBar state={state} teamId={team.id} />
 
       <main className="team-main">
@@ -97,6 +98,7 @@ function MoneyBar({ state, teamId }: { state: StateView; teamId: string }) {
 
 function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: string; watchlist: Record<string, WatchlistEntry> }) {
   const run = useAction();
+  const [bidding, setBidding] = useState(false);
   const team = state.teams.find((t) => t.id === teamId)!;
   const lot = state.lot;
   const player = lot ? state.players.find((p) => p.id === lot.playerId) : null;
@@ -153,8 +155,18 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
             {state.settings.bidderBidding ? (
               <button
                 className={`btn primary bid-big${leading ? ' leading' : ''}`}
-                disabled={!myBidState?.canBid}
-                onClick={() => run(() => api.post('/api/team/bid'))}
+                disabled={!myBidState?.canBid || bidding}
+                onClick={async () => {
+                  // Quote the lot and the exact amount on the button: if the
+                  // auction moved on (or a rival bid landed first), the server
+                  // rejects instead of bidding blind on the wrong thing.
+                  setBidding(true);
+                  try {
+                    await run(() => api.post('/api/team/bid', { lotId: lot.id, amount: lot.nextMinBid }));
+                  } finally {
+                    setBidding(false);
+                  }
+                }}
               >
                 {leading
                   ? 'You lead — waiting for a counter-bid'

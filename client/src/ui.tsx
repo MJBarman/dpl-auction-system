@@ -86,6 +86,16 @@ export function ConnectionDot({ connected }: { connected: boolean }) {
   );
 }
 
+/** Full-width warning shown while the live socket is down, so nobody acts on a stale screen. */
+export function OfflineBanner({ connected }: { connected: boolean }) {
+  if (connected) return null;
+  return (
+    <div className="offline-banner" role="alert">
+      ⚠️ Connection lost — reconnecting… this screen may be out of date.
+    </div>
+  );
+}
+
 // ---- toasts -----------------------------------------------------------------
 
 interface Toast {

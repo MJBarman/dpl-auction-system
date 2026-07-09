@@ -79,6 +79,7 @@ export interface Bid {
 }
 
 export interface LotView {
+  id: string;
   playerId: string;
   bids: Bid[];
   openedAt: number;

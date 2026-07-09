@@ -312,3 +312,54 @@ test('reset returns every player to the pool', () => {
   assert.equal(kabya.status, 'available');
   assert.equal(engine.teamSummary(s, 't2').spent, 0);
 });
+
+// ---- stale-client guards (lot id + hammer guard) ------------------------------
+
+test('a bid quoting a closed lot id is rejected (stale phone cannot bid on the wrong player)', () => {
+  const s = live();
+  open(s, playerByName(s, 'Kabya').id);
+  const staleLotId = s.lot!.id;
+  engine.placeBid(s, 't1', undefined, 'admin', 1);
+  engine.sellLot(s, 2);
+  open(s, playerByName(s, 'Hirok Roy').id);
+  assert.notEqual(s.lot!.id, staleLotId);
+  assert.throws(() => engine.placeBid(s, 't2', undefined, 'team', 3, staleLotId), /too late/i);
+  // Quoting the current lot id works.
+  engine.placeBid(s, 't2', undefined, 'team', 4, s.lot!.id);
+  assert.equal(s.lot!.bids.length, 1);
+});
+
+test('hammer guard rejects SOLD when a new bid landed after the auctioneer looked', () => {
+  const s = live();
+  open(s, playerByName(s, 'Kabya').id);
+  engine.placeBid(s, 't1', undefined, 'admin', 1); // 600
+  // Auctioneer sees t1 @ 600 and reaches for the hammer…
+  const seen = { lotId: s.lot!.id, expectedTeamId: 't1', expectedPrice: 600 };
+  // …but t2 sneaks in at 700.
+  engine.placeBid(s, 't2', undefined, 'team', 2);
+  assert.throws(() => engine.sellLot(s, 3, seen), /new bid just landed/i);
+  // Selling with the fresh view succeeds.
+  const sale = engine.sellLot(s, 4, { lotId: s.lot!.id, expectedTeamId: 't2', expectedPrice: 700 });
+  assert.equal(sale.teamId, 't2');
+  assert.equal(sale.price, 700);
+});
+
+test('passLot with a stale lot id is rejected', () => {
+  const s = live();
+  open(s, playerByName(s, 'Kabya').id);
+  const staleLotId = s.lot!.id;
+  engine.passLot(s, staleLotId); // same lot — fine
+  open(s, playerByName(s, 'Hirok Roy').id);
+  assert.throws(() => engine.passLot(s, staleLotId), /too late/i);
+});
+
+test('each opened lot gets a unique id', () => {
+  const s = live();
+  const ids = new Set<string>();
+  for (const name of ['Kabya', 'Hirok Roy']) {
+    open(s, playerByName(s, name).id);
+    ids.add(s.lot!.id);
+    engine.cancelLot(s);
+  }
+  assert.equal(ids.size, 2);
+});

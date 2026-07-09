@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store';
 import { PlayerView, StateView } from '../types';
-import { ConnectionDot, fmt, PlayerBadges, StatsGrid, TierBadge, useCountdown } from '../ui';
+import { ConnectionDot, fmt, OfflineBanner, PlayerBadges, StatsGrid, TierBadge, useCountdown } from '../ui';
 
 /** Full-screen broadcast display for the projector / TV. */
 export default function ScreenPage() {
@@ -50,6 +50,8 @@ export default function ScreenPage() {
         </div>
         <ConnectionDot connected={connected} />
       </header>
+
+      <OfflineBanner connected={connected} />
 
       <main className="screen-main">
         {state.stage === 'completed'

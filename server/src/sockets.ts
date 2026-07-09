@@ -10,6 +10,11 @@ export function createSockets(httpServer: HttpServer, store: Store): { io: Serve
   const io = new Server(httpServer, {
     cors: { origin: true, credentials: false },
     serveClient: false,
+    // Phones on venue Wi-Fi drop silently (screen lock, network switch).
+    // Tight ping cycle detects dead connections in ~20s instead of ~45s so
+    // captains reconnect (and get fresh state) quickly.
+    pingInterval: 10_000,
+    pingTimeout: 10_000,
   });
 
   function payloadFor(socket: Socket) {

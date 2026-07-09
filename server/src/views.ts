@@ -15,6 +15,7 @@ export function publicState(state: State, undoLabel: string | null) {
   if (lot) {
     const leading = lot.bids[lot.bids.length - 1] ?? null;
     lotView = {
+      id: lot.id,
       playerId: lot.playerId,
       bids: lot.bids,
       openedAt: lot.openedAt,
