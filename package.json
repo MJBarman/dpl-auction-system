@@ -1,0 +1,22 @@
+{
+  "name": "dpl-auction-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DPL Season 4 live player auction system — auctioneer console, private bidder pages, projector screen.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev -w server\" \"npm:dev -w client\"",
+    "build": "npm run build -w client && npm run build -w server",
+    "start": "node server/dist/index.js",
+    "test": "npm test -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
