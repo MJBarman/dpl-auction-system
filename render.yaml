@@ -1,0 +1,36 @@
+# One-click deploy on Render (https://render.com) — a host that supports
+# long-running Node servers, WebSockets and a writable disk, which this
+# auction system needs (Vercel's serverless platform does not).
+#
+# In the Render dashboard: New + → Blueprint → pick this GitHub repo.
+services:
+  - type: web
+    name: dpl-auction
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Set your own 6-digit admin PIN in the Render dashboard when prompted.
+      # Without it a random PIN is generated on every cold start (the free
+      # tier's disk is wiped whenever the service restarts).
+      - key: ADMIN_PIN
+        sync: false
+    # ── Persistence (recommended for the real auction) ──────────────────
+    # The FREE plan has an ephemeral disk: the SQLite database is lost on
+    # every restart/redeploy, and the service spins down after ~15 min of
+    # inactivity. Fine for trying it out; risky for auction night.
+    # On the Starter plan, uncomment the disk below (and the DATA_DIR env
+    # var) so auction data survives restarts:
+    #
+    # disk:
+    #   name: auction-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    #
+    # and add under envVars:
+    #   - key: DATA_DIR
+    #     value: /var/data

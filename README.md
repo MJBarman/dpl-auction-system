@@ -57,7 +57,14 @@ Captains can bid from their phones (server-enforced increments and guardrails) �
 
 ## Production deployment
 
-- `npm run build && npm start` serves everything (UI + API + WebSockets) on one port (`PORT` env, default 4000) — put it behind any reverse proxy for HTTPS, or run it on the venue laptop over LAN.
+> ⚠️ **This app cannot run on Vercel / Netlify.** Those are *serverless* platforms: functions
+> spin up per-request and die, so there is no long-running process to hold the WebSocket
+> connections and no writable disk for the SQLite database. Deploying there fails with
+> `FUNCTION_INVOCATION_FAILED`. Use a host that runs real Node servers instead:
+
+- **Render (easiest):** push this repo to GitHub → [dashboard.render.com](https://dashboard.render.com) → *New + → Blueprint* → pick the repo. The included [render.yaml](render.yaml) configures everything; set your `ADMIN_PIN` when prompted. Free tier works for testing (but spins down when idle and **loses data on restart**) — for the real auction use the Starter plan and uncomment the persistent disk in `render.yaml`.
+- **Railway / Fly.io / any VPS or Docker host:** the included [Dockerfile](Dockerfile) builds a ready-to-run image. Mount a volume at `/data` so the database persists, and set `ADMIN_PIN`.
+- **Venue laptop over LAN (most reliable for auction night):** `npm run build && npm start` serves everything (UI + API + WebSockets) on one port (`PORT` env, default 4000). Phones on the same Wi-Fi use the printed Network URL — no internet required, nothing can go down mid-auction.
 - Data lives in `server/data/auction.db` (override the folder with `DATA_DIR`). Back it up by copying the file or downloading the JSON backup.
 - Every action is written to an append-only **audit log** (Admin → Log) — the official record of the auction.
 
