@@ -256,45 +256,7 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .wl-hint { color: #fcd34d; font-size: 13px; margin-top: 4px; font-weight: 600; }
 .pool-table td { font-size: 13.5px; }
 
-/* ---------- projector screen ---------- */
-.screen-page { display: flex; flex-direction: column; min-height: 100vh; }
-.screen-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 22px; border-bottom: 1px solid var(--border); }
-.screen-stage { font-weight: 900; letter-spacing: .1em; color: #4ade80; }
-.screen-main { flex: 1; padding: 22px; max-width: 1400px; width: 100%; margin: 0 auto; }
-.screen-lot { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; align-items: start; }
-.screen-lot-player h1 { font-size: clamp(34px, 6vw, 64px); margin: 8px 0 4px; }
-.screen-role { color: var(--muted); font-size: 18px; margin-bottom: 10px; }
-.screen-lot-player .stats-grid { grid-template-columns: repeat(4, 1fr); }
-.screen-lot-player .stat-value { font-size: 20px; }
-.screen-lot-bid {
-  background: var(--surface); border: 2px solid var(--border); border-radius: 18px;
-  padding: 26px; text-align: center; position: sticky; top: 20px;
-}
-.screen-bid-label { font-size: 13px; letter-spacing: .18em; color: var(--muted); font-weight: 800; }
-.screen-bid-amount { font-size: clamp(52px, 9vw, 110px); font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.05; }
-.screen-bid-team { font-size: clamp(18px, 3vw, 30px); font-weight: 800; min-height: 1.3em; }
-.screen-next-min { margin-top: 6px; }
-.screen-bid-history { margin-top: 16px; text-align: left; font-size: 16px; }
-.screen-idle { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; padding-top: 4vh; }
-.screen-idle h2 { font-size: clamp(24px, 4vw, 40px); }
-.screen-idle-right { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; font-size: 16px; }
-.screen-teams { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; padding: 14px 22px; border-top: 1px solid var(--border); background: var(--bg2); }
-.screen-team { border: 1px solid var(--border); border-left-width: 4px; border-radius: 10px; padding: 8px 12px; }
-.screen-team-name { font-weight: 800; font-size: 14px; }
-.screen-team-money { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.screen-results .result-team { font-size: 15px; }
-
-.flash-overlay {
-  position: fixed; inset: 0; z-index: 70; display: grid; place-items: center;
-  background: rgba(4, 8, 20, .82); animation: flashIn .25s ease-out;
-}
-.flash-inner { text-align: center; animation: flashPop .4s cubic-bezier(.2, 1.6, .4, 1); }
-.flash-word { font-size: clamp(60px, 14vw, 150px); font-weight: 900; letter-spacing: .05em; color: var(--flash-color); text-shadow: 0 0 60px var(--flash-color); }
-.flash-overlay.unsold .flash-word { color: var(--warn); text-shadow: 0 0 60px var(--warn); }
-.flash-player { font-size: clamp(26px, 5vw, 52px); font-weight: 800; margin-top: 6px; }
-.flash-detail { font-size: clamp(18px, 3vw, 30px); margin-top: 8px; }
-@keyframes flashIn { from { opacity: 0; } }
-@keyframes flashPop { from { transform: scale(.6); opacity: 0; } }
+/* ---------- projector screen: see screen.css (loaded by ScreenPage) ---------- */
 
 /* ---------- player photos ---------- */
 .player-photo {
@@ -312,8 +274,6 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 
 .lot-id { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
 .player-cell { display: flex; gap: 8px; align-items: center; }
-.screen-player-head { display: flex; gap: 22px; align-items: flex-start; }
-.flash-inner .player-photo { display: flex; margin: 14px auto 0; box-shadow: 0 0 50px rgba(0, 0, 0, .55); }
 
 /* photo upload page (/photo/CODE) */
 .photo-page { max-width: 560px; margin: 0 auto; padding: 28px 16px 60px; }
@@ -327,8 +287,7 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {
-  .console-grid, .live-grid, .screen-lot, .screen-idle { grid-template-columns: 1fr; }
-  .screen-lot-bid { position: static; }
+  .console-grid, .live-grid { grid-template-columns: 1fr; }
   .topbar { position: static; }
   .money-bar { top: 0; }
   .player-photo.xl { width: 150px; height: 150px; font-size: 40px; }
