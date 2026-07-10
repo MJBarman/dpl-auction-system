@@ -13,7 +13,7 @@ services:
     healthCheckPath: /
     envVars:
       - key: NODE_VERSION
-        value: "20"
+        value: "22"
       # Set your own 6-digit admin PIN in the Render dashboard when prompted.
       # Without it a random PIN is generated on every cold start (the free
       # tier's disk is wiped whenever the service restarts).

@@ -2,7 +2,7 @@
 #   docker build -t dpl-auction .
 #   docker run -p 4000:4000 -v auction-data:/data -e ADMIN_PIN=123456 dpl-auction
 
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 # Toolchain in case better-sqlite3 has to compile from source on this platform.
 RUN apt-get update \
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:20-slim
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DATA_DIR=/data
