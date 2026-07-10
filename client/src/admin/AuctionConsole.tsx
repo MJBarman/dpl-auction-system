@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { StateView } from '../types';
 import {
-  fmt, PlayerBadges, StatsGrid, TierBadge, useAction, useCountdown,
+  fmt, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge, useAction, useCountdown,
 } from '../ui';
 
 export default function AuctionConsole({ state }: { state: StateView }) {
@@ -168,10 +168,13 @@ function LotCard({ state }: { state: StateView }) {
   return (
     <div className="card lot-card">
       <div className="lot-head">
-        <div>
-          <TierBadge state={state} tierKey={player.tierKey} /> <PlayerBadges player={player} />
-          <h1 className="lot-name">{player.name}</h1>
-          <div className="muted">{player.role || '—'} · base {fmt(player.basePrice)} pts</div>
+        <div className="lot-id">
+          <PlayerPhoto url={player.photoUrl} name={player.name} size="md" />
+          <div>
+            <TierBadge state={state} tierKey={player.tierKey} /> <PlayerBadges player={player} />
+            <h1 className="lot-name">{player.name}</h1>
+            <div className="muted">{player.role || '—'} · base {fmt(player.basePrice)} pts</div>
+          </div>
         </div>
         <div className="lot-bid-box">
           {timer !== null && <div className={`hammer-timer${timer <= 3 ? ' urgent' : ''}`}>{timer}s</div>}

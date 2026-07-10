@@ -19,6 +19,12 @@ services:
       # tier's disk is wiped whenever the service restarts).
       - key: ADMIN_PIN
         sync: false
+      # Supabase Storage for player photos (README → "Player photos").
+      # Leave blank to run without photos — everything else still works.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
     # ── Persistence (recommended for the real auction) ──────────────────
     # The FREE plan has an ephemeral disk: the SQLite database is lost on
     # every restart/redeploy, and the service spins down after ~15 min of

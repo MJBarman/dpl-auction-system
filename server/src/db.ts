@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { AuctionSnapshot, EventRow, State } from './types';
-import { buildInitialState } from './seed';
+import { buildInitialState, ensurePhotoCodes } from './seed';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const MAX_UNDO = 200;
@@ -42,6 +42,7 @@ export class Store {
     const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get('state') as { value: string } | undefined;
     if (row) {
       this.state = JSON.parse(row.value) as State;
+      if (ensurePhotoCodes(this.state)) this.saveState(); // pre-photo-feature database
     } else {
       this.state = buildInitialState();
       this.saveState();
@@ -59,6 +60,7 @@ export class Store {
   }
 
   replaceState(next: State): void {
+    ensurePhotoCodes(next); // restored backups may predate the photo feature
     this.state = next;
     this.undoStack = [];
     this.persistUndo();

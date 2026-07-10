@@ -1,3 +1,4 @@
+import './env'; // must run first — later imports read process.env at load time
 import express from 'express';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -6,6 +7,7 @@ import path from 'node:path';
 import { createApi } from './api';
 import { attachSession, ensurePin } from './auth';
 import { Store } from './db';
+import { PHOTO_BUCKET, photosConfigured } from './photos';
 import { createSockets } from './sockets';
 
 const PORT = Number(process.env.PORT) || 4000;
@@ -65,6 +67,9 @@ server.listen(PORT, HOST, () => {
   console.log('');
   console.log(`  Admin PIN: ${adminPin}   (override with the ADMIN_PIN env var; change it in Settings)`);
   console.log('  Team join codes are shown in the admin console under "Teams".');
+  console.log(photosConfigured()
+    ? `  Player photos: Supabase bucket "${PHOTO_BUCKET}" — upload links in Admin → Players.`
+    : '  Player photos: disabled — set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable uploads (see server/.env.example).');
   console.log('');
 });
 

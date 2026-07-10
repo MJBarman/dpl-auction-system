@@ -3,6 +3,7 @@ import {
   allSummaries, basePriceOf, checkBid, eligiblePool, feasibilityWarnings,
   nextMinBid, progress, unsoldCount,
 } from './engine';
+import { photoUrlFor } from './photos';
 import { State } from './types';
 
 // Builds the wire payloads. Public state deliberately never includes team
@@ -51,6 +52,7 @@ export function publicState(state: State, undoLabel: string | null) {
       demandRank: p.demandRank ?? null, sleeper: p.sleeper ?? false,
       status: p.status, teamId: p.teamId ?? null, price: p.price ?? null,
       round: p.round ?? null,
+      photoUrl: photoUrlFor(p.photoPath),
     })),
     lot: lotView,
     progress: progress(state),
@@ -70,6 +72,8 @@ export function statePayloadFor(store: Store, session: Session | undefined) {
     base.you = { role: 'admin' };
     base.admin = {
       teamCodes: state.teams.map((t) => ({ teamId: t.id, code: t.code })),
+      // Secret per-player photo-upload codes — admin-only, like team codes.
+      photoCodes: state.players.map((p) => ({ playerId: p.id, code: p.photoCode ?? '' })),
       warnings: feasibilityWarnings(state),
     };
   } else if (session?.role === 'team' && session.teamId) {

@@ -55,6 +55,30 @@ Nothing is hard-coded. In **Admin → Settings** you can change, even mid-event:
 
 Captains can bid from their phones (server-enforced increments and guardrails) — or turn **device bidding off** in Settings to run a pure voice auction where their pages stay read-only.
 
+## Player photos (Supabase Storage)
+
+Each player gets a **private photo-upload link** (`/photo/<secret-code>`) — send it over WhatsApp
+from **Admin → Players → 📸 Copy photo links** (all at once) or per player via *Edit → Copy link*.
+The player picks a photo, the browser resizes it, and it appears instantly on the projector
+screen, the admin console and the captains' dashboards. **The same link updates the photo later**;
+*Edit → New link* revokes a leaked one.
+
+Setup (one-time):
+
+1. Create a [Supabase](https://supabase.com) project and a **public** storage bucket named
+   `player-photos` (recommended: 5 MB file-size limit, allowed types `image/jpeg`, `image/png`,
+   `image/webp`). *Already done for this project's Supabase instance.*
+2. Give the server two env vars — locally copy [server/.env.example](server/.env.example) to
+   `server/.env`; on Render/Docker set real env vars:
+   - `SUPABASE_URL` — Project Settings → Data API
+   - `SUPABASE_SERVICE_ROLE_KEY` — Project Settings → API Keys (`service_role` or a
+     `sb_secret_...` key). Server-side only — never ships to browsers.
+
+Without these the app runs normally and shows initials avatars; the upload page politely says
+uploads are unavailable. Photos are stored under a **new immutable URL on every upload** with
+1-year cache headers, so live-bidding re-renders never refetch or flicker — the swap only
+happens when a player actually uploads a new photo.
+
 ## Production deployment
 
 > ⚠️ **This app cannot run on Vercel / Netlify.** Those are *serverless* platforms: functions

@@ -60,6 +60,8 @@ export interface Player {
   price?: number | null;      // hammer price
   round?: SaleRound | null;
   offeredInPass?: boolean;    // offered in current accelerated pass
+  photoPath?: string | null;  // object path in the Supabase photo bucket
+  photoCode?: string;         // secret in the player's photo-upload link
 }
 
 export interface Team {

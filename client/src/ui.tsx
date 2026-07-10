@@ -46,6 +46,39 @@ export function StatsGrid({ stats, compact }: { stats: PlayerStats; compact?: bo
   );
 }
 
+export function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+}
+
+/** Player headshot with an initials fallback.
+ *  Memoised on purpose: during a bidding war every bid replaces the whole
+ *  state snapshot and re-renders the page, but this component's props (a
+ *  stable URL string + name) don't change, so React never touches the <img>
+ *  and the browser never refetches — no flicker on the projector or phones.
+ *  Each upload gets a fresh immutable URL, so a changed photo still shows up. */
+export const PlayerPhoto = React.memo(function PlayerPhoto({ url, name, size = 'md' }: {
+  url: string | null;
+  name: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+}) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  if (!url || failedUrl === url) {
+    return <span className={`player-photo ${size} placeholder`} role="img" aria-label={name}>{initialsOf(name)}</span>;
+  }
+  return (
+    <img
+      className={`player-photo ${size}`}
+      src={url}
+      alt={name}
+      loading={size === 'sm' ? 'lazy' : 'eager'}
+      decoding="async"
+      draggable={false}
+      onError={() => setFailedUrl(url)}
+    />
+  );
+});
+
 export function PlayerBadges({ player }: { player: PlayerView }) {
   return (
     <span className="player-badges">

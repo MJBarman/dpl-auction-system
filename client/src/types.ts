@@ -56,6 +56,7 @@ export interface PlayerView {
   teamId: string | null;
   price: number | null;
   round: SaleRound | null;
+  photoUrl: string | null;
 }
 
 export interface TeamView {
@@ -136,6 +137,7 @@ export interface StateView {
   you: You;
   admin?: {
     teamCodes: { teamId: string; code: string }[];
+    photoCodes: { playerId: string; code: string }[];
     warnings: string[];
   };
 }

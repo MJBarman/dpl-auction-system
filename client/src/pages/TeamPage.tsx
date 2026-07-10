@@ -5,7 +5,7 @@ import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { PlayerView, StateView, WatchlistEntry } from '../types';
 import {
-  ConnectionDot, fmt, Modal, OfflineBanner, PlayerBadges, StatsGrid, TierBadge, useAction, useCountdown,
+  ConnectionDot, fmt, Modal, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge, useAction, useCountdown,
 } from '../ui';
 
 export default function TeamPage() {
@@ -126,7 +126,9 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
         {player && lot && (
           <div className={`card lot-card${leading ? ' you-lead' : ''}`}>
             <div className="lot-head">
-              <div>
+              <div className="lot-id">
+                <PlayerPhoto url={player.photoUrl} name={player.name} size="md" />
+                <div>
                 <TierBadge state={state} tierKey={player.tierKey} /> <PlayerBadges player={player} />
                 <h1 className="lot-name">{player.name}</h1>
                 <div className="muted">{player.role || '—'} · base {fmt(player.basePrice)} pts</div>
@@ -136,6 +138,7 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                     {wl.targetPrice != null && lot.currentBid !== null && lot.currentBid >= wl.targetPrice ? ' (passed!)' : ''}
                   </div>
                 )}
+                </div>
               </div>
               <div className="lot-bid-box">
                 {timer !== null && <div className={`hammer-timer${timer <= 3 ? ' urgent' : ''}`}>{timer}s</div>}
@@ -328,7 +331,10 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
               <tr key={p.id} className={p.status === 'sold' ? 'row-dim' : ''}>
                 <td><button className={`star${wl?.starred ? ' on' : ''}`} onClick={() => toggleStar(p)}>{wl?.starred ? '⭐' : '☆'}</button></td>
                 <td onClick={() => setEditing(p)} className="clickable">
-                  {p.name} <PlayerBadges player={p} />
+                  <div className="player-cell">
+                    <PlayerPhoto url={p.photoUrl} name={p.name} size="sm" />
+                    <span>{p.name} <PlayerBadges player={p} /></span>
+                  </div>
                   {wl?.note ? <div className="muted small">📝 {wl.note}</div> : null}
                 </td>
                 <td><TierBadge state={state} tierKey={p.tierKey} /></td>
@@ -368,8 +374,11 @@ function WatchlistModal({ state, player, entry, onClose }: {
   return (
     <Modal title={player.name} onClose={onClose}>
       <div className="row" style={{ marginBottom: 8 }}>
-        <TierBadge state={state} tierKey={player.tierKey} />
-        <span className="muted">{player.role} · base {fmt(player.basePrice)} pts</span>
+        <PlayerPhoto url={player.photoUrl} name={player.name} size="md" />
+        <div className="stack" style={{ gap: 4 }}>
+          <TierBadge state={state} tierKey={player.tierKey} />
+          <span className="muted">{player.role} · base {fmt(player.basePrice)} pts</span>
+        </div>
       </div>
       <StatsGrid stats={player.stats} compact />
       {player.notes && <p className="notes">{player.notes}</p>}

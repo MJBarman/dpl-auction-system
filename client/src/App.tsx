@@ -5,6 +5,7 @@ import { ToastProvider } from './ui';
 import AdminPage from './pages/AdminPage';
 import JoinPage from './pages/JoinPage';
 import Landing from './pages/Landing';
+import PhotoPage from './pages/PhotoPage';
 import ScreenPage from './pages/ScreenPage';
 import TeamPage from './pages/TeamPage';
 
@@ -19,6 +20,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/join/:code" element={<JoinPage />} />
+        <Route path="/photo/:code" element={<PhotoPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/screen" element={<ScreenPage />} />

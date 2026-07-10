@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { PlayerView, StateView } from '../types';
-import { fmt, Modal, useAction } from '../ui';
+import { fmt, Modal, PlayerPhoto, useAction, useToast } from '../ui';
+
+/** The player's photo-upload link (admin-only — the code is a secret). */
+function photoLinkFor(state: StateView, playerId: string): string | null {
+  const code = state.admin?.photoCodes.find((c) => c.playerId === playerId)?.code;
+  return code ? `${window.location.origin}/photo/${code}` : null;
+}
 
 const STAT_FIELDS: { key: string; label: string }[] = [
   { key: 'mat', label: 'Matches' },
@@ -18,6 +24,7 @@ const STAT_FIELDS: { key: string; label: string }[] = [
 
 export default function PlayersTab({ state }: { state: StateView }) {
   const run = useAction();
+  const toast = useToast();
   const [query, setQuery] = useState('');
   const [tierFilter, setTierFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -50,6 +57,27 @@ export default function PlayersTab({ state }: { state: StateView }) {
         </select>
         <button className="btn primary" onClick={() => setAdding(true)}>+ Add player</button>
         <button className="btn" onClick={() => setBulk(true)}>Bulk add</button>
+        <button
+          className="btn"
+          title="Copy every player's photo-upload link — paste into the players' group chat"
+          onClick={async () => {
+            const lines = state.players
+              .map((p) => {
+                const link = photoLinkFor(state, p.id);
+                return link ? `${p.name}: ${link}` : null;
+              })
+              .filter(Boolean)
+              .join('\n');
+            try {
+              await navigator.clipboard.writeText(lines);
+              toast('All photo-upload links copied — share each player their own link', 'ok');
+            } catch {
+              toast('Could not copy — open a player with Edit to copy links one by one');
+            }
+          }}
+        >
+          📸 Copy photo links
+        </button>
       </div>
 
       <table className="table players-table">
@@ -62,7 +90,12 @@ export default function PlayersTab({ state }: { state: StateView }) {
             const team = state.teams.find((t) => t.id === p.teamId);
             return (
               <tr key={p.id}>
-                <td>{p.name}{p.demandRank ? <span className="badge hot small-badge">#{p.demandRank}</span> : null}</td>
+                <td>
+                  <div className="player-cell">
+                    <PlayerPhoto url={p.photoUrl} name={p.name} size="sm" />
+                    <span>{p.name}{p.demandRank ? <span className="badge hot small-badge">#{p.demandRank}</span> : null}</span>
+                  </div>
+                </td>
                 <td style={{ color: tier?.color }}>{tier?.name ?? p.tierKey}</td>
                 <td className="muted">{p.role}</td>
                 <td className="num">{fmt(p.basePrice)}</td>
@@ -174,11 +207,57 @@ function PlayerModal({ state, player, onClose }: { state: StateView; player: Pla
         </div>
       </details>
       <label>Notes<textarea className="input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+      {player && <PhotoLinkBox state={state} player={player} />}
       <div className="row end">
         {player && <button className="btn warn" onClick={remove}>Delete</button>}
         <button className="btn primary" disabled={!form.name.trim()} onClick={save}>{player ? 'Save' : 'Add'}</button>
       </div>
     </Modal>
+  );
+}
+
+function PhotoLinkBox({ state, player }: { state: StateView; player: PlayerView }) {
+  const run = useAction();
+  const toast = useToast();
+  // Read the live player for the photo: the modal's `player` prop is a snapshot
+  // from when it was opened, and the photo may have been uploaded since.
+  const live = state.players.find((p) => p.id === player.id) ?? player;
+  const link = photoLinkFor(state, player.id);
+
+  return (
+    <div className="join-box">
+      <PlayerPhoto url={live.photoUrl} name={live.name} size="md" />
+      <div className="grow">
+        <div className="muted small">Photo-upload link — send it to {live.name}; the same link also updates the photo later</div>
+        <div className="row wrap">
+          <button
+            className="btn ghost"
+            disabled={!link}
+            onClick={async () => {
+              if (!link) return;
+              try {
+                await navigator.clipboard.writeText(link);
+                toast('Photo link copied', 'ok');
+              } catch {
+                toast(link, 'ok'); // clipboard blocked (non-HTTPS) — show it instead
+              }
+            }}
+          >
+            Copy link
+          </button>
+          <button
+            className="btn ghost"
+            onClick={() => {
+              if (window.confirm('Generate a new photo link? The old link stops working immediately.')) {
+                run(() => api.post(`/api/admin/players/${player.id}/regenerate-photo-code`), 'New photo link generated');
+              }
+            }}
+          >
+            New link
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

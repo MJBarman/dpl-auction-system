@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store';
 import { PlayerView, StateView } from '../types';
-import { ConnectionDot, fmt, OfflineBanner, PlayerBadges, StatsGrid, TierBadge, useCountdown } from '../ui';
+import { ConnectionDot, fmt, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge, useCountdown } from '../ui';
 
 /** Full-screen broadcast display for the projector / TV. */
 export default function ScreenPage() {
@@ -75,6 +75,7 @@ export default function ScreenPage() {
         <div className={`flash-overlay ${flash.kind}`} style={{ ['--flash-color' as any]: flash.teamColor ?? '#94a3b8' }}>
           <div className="flash-inner">
             <div className="flash-word">{flash.kind === 'sold' ? 'SOLD!' : 'UNSOLD'}</div>
+            <PlayerPhoto url={flash.player.photoUrl} name={flash.player.name} size="lg" />
             <div className="flash-player">{flash.player.name}</div>
             {flash.kind === 'sold' && (
               <div className="flash-detail">
@@ -97,9 +98,14 @@ function ScreenLot({ state }: { state: StateView }) {
   return (
     <div className="screen-lot">
       <div className="screen-lot-player">
-        <div><TierBadge state={state} tierKey={player.tierKey} /> <PlayerBadges player={player} /></div>
-        <h1>{player.name}</h1>
-        <div className="screen-role">{player.role || ''} · base price {fmt(player.basePrice)} pts</div>
+        <div className="screen-player-head">
+          <PlayerPhoto url={player.photoUrl} name={player.name} size="xl" />
+          <div>
+            <div><TierBadge state={state} tierKey={player.tierKey} /> <PlayerBadges player={player} /></div>
+            <h1>{player.name}</h1>
+            <div className="screen-role">{player.role || ''} · base price {fmt(player.basePrice)} pts</div>
+          </div>
+        </div>
         <StatsGrid stats={player.stats} />
         {player.notes && <p className="notes">{player.notes}</p>}
       </div>
@@ -160,7 +166,7 @@ function ScreenIdle({ state }: { state: StateView }) {
             const t = state.teams.find((x) => x.id === p.teamId);
             return (
               <div key={p.id} className="bid-row">
-                <span className="dot" style={{ background: t?.color }} />
+                <PlayerPhoto url={p.photoUrl} name={p.name} size="sm" />
                 <span>{p.name}</span>
                 <span className="muted small">{t?.name}</span>
                 <span className="bid-amt">{fmt(p.price)}</span>

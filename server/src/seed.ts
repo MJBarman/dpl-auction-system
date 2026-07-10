@@ -150,6 +150,24 @@ export function generateCode(len = 6): string {
   return out;
 }
 
+/** Give every player a unique photo-upload code. Runs on load so databases
+ *  (and restored backups) from before the photo feature keep working.
+ *  Returns true when anything changed and the state should be re-persisted. */
+export function ensurePhotoCodes(state: State): boolean {
+  const seen = new Set<string>();
+  let changed = false;
+  for (const p of state.players) {
+    if (!p.photoCode || seen.has(p.photoCode)) {
+      let code = generateCode(10);
+      while (seen.has(code)) code = generateCode(10);
+      p.photoCode = code;
+      changed = true;
+    }
+    seen.add(p.photoCode);
+  }
+  return changed;
+}
+
 export function buildInitialState(): State {
   const teams: Team[] = TEAM_SEED.map((t) => ({ ...t, code: generateCode() }));
   const players: Player[] = PLAYER_SEED.map((p, i) => ({
@@ -167,6 +185,8 @@ export function buildInitialState(): State {
     price: null,
     round: null,
     offeredInPass: false,
+    photoPath: null,
+    photoCode: generateCode(10),
   }));
   return {
     settings: DEFAULT_SETTINGS,

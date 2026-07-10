@@ -1,10 +1,13 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { Store } from './db';
 import {
   loginRateLimiter, newToken, requireAdmin, requireTeam, safeEqual,
 } from './auth';
 import * as engine from './engine';
 import { AuctionError } from './engine';
+import {
+  PHOTO_MAX_BYTES, photosConfigured, photoUrlFor, removePhoto, sniffImage, uploadPhoto,
+} from './photos';
 import { buildInitialState, generateCode } from './seed';
 import { statePayloadFor } from './views';
 import {
@@ -180,6 +183,68 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   });
 
   // =========================================================================
+  // Player photos — public endpoints behind a per-player secret link.
+  // The player opens /photo/<code> (distributed by the admin), uploads a
+  // photo, and can revisit the same link any time to replace it.
+  // =========================================================================
+  const playerByPhotoCode = (code: unknown) =>
+    typeof code === 'string' && code
+      ? store.state.players.find((p) => p.photoCode && safeEqual(p.photoCode, code))
+      : undefined;
+
+  /** Unique upload code for a new (or re-keyed) player. */
+  const newPhotoCode = () => {
+    let code = generateCode(10);
+    while (store.state.players.some((p) => p.photoCode === code)) code = generateCode(10);
+    return code;
+  };
+
+  router.get('/photo/:code', (req, res) => {
+    const player = playerByPhotoCode(req.params.code);
+    if (!player) throw new AuctionError('This photo link is not valid — ask the organiser for a fresh one', 404);
+    res.json({
+      name: player.name,
+      role: player.role,
+      tierName: store.state.settings.tiers.find((t) => t.key === player.tierKey)?.name ?? null,
+      photoUrl: photoUrlFor(player.photoPath),
+      uploadsEnabled: photosConfigured(),
+      maxBytes: PHOTO_MAX_BYTES,
+    });
+  });
+
+  router.post(
+    '/photo/:code',
+    loginRateLimiter(10), // uploads are rare — throttle hard
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: PHOTO_MAX_BYTES }),
+    async (req, res, next) => {
+      try {
+        const player = playerByPhotoCode(req.params.code);
+        if (!player) throw new AuctionError('This photo link is not valid — ask the organiser for a fresh one', 404);
+        if (!photosConfigured()) throw new AuctionError('Photo uploads are not set up on the server yet — tell the organiser', 503);
+        const body = req.body as unknown;
+        if (!Buffer.isBuffer(body) || body.length === 0) {
+          throw new AuctionError('Send the image bytes as the request body (JPEG, PNG or WebP)', 415);
+        }
+        const kind = sniffImage(body);
+        if (!kind) throw new AuctionError('That file does not look like a JPEG, PNG or WebP image', 415);
+        // Fresh path per upload → immutable public URL (cache-friendly during
+        // live bidding); replacing a photo swaps the path atomically below.
+        const objectPath = `players/${player.id}/${Date.now()}.${kind.ext}`;
+        await uploadPhoto(objectPath, body, kind.contentType);
+        let previous: string | null = null;
+        mutate(null, 'photo', () => {
+          previous = player.photoPath ?? null;
+          player.photoPath = objectPath;
+        }, () => `${player.name} updated their profile photo`);
+        if (previous && previous !== objectPath) removePhoto(previous);
+        res.json({ ok: true, photoUrl: photoUrlFor(objectPath) });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // =========================================================================
   // Team (captain) endpoints
   // =========================================================================
   router.post('/team/bid', requireTeam, (req, res) => {
@@ -238,6 +303,8 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       price: null,
       round: null,
       offeredInPass: false,
+      photoPath: null,
+      photoCode: newPhotoCode(),
     };
     mutate(null, 'roster', () => store.state.players.push(player), () => `Added player ${player.name} (${tierKey})`);
     res.json({ ok: true, id: player.id });
@@ -267,6 +334,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
           sleeper: false,
           status: 'available',
           teamId: null, price: null, round: null, offeredInPass: false,
+          photoPath: null, photoCode: newPhotoCode(),
         });
         added.push(name);
       }
@@ -303,6 +371,15 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       store.state.players = store.state.players.filter((p) => p.id !== player.id);
       for (const wl of Object.values(store.state.watchlists)) delete wl[player.id];
     }, () => `Removed player ${player.name} from the pool`);
+    if (player.photoPath) removePhoto(player.photoPath);
+    res.json({ ok: true });
+  });
+
+  router.post('/admin/players/:id/regenerate-photo-code', requireAdmin, (req, res) => {
+    const player = engine.getPlayer(store.state, req.params.id);
+    mutate(null, 'roster', () => {
+      player.photoCode = newPhotoCode(); // the old link stops working immediately
+    }, () => `Regenerated the photo-upload link for ${player.name}`);
     res.json({ ok: true });
   });
 
@@ -581,6 +658,14 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof AuctionError) {
       res.status(err.status).json({ error: err.message });
+      return;
+    }
+    // Body-parser errors (oversized upload, malformed JSON) carry a 4xx status.
+    const status = (err as { statusCode?: unknown }).statusCode;
+    if (typeof status === 'number' && status >= 400 && status < 500) {
+      res.status(status).json({
+        error: status === 413 ? 'That image is too large — maximum 5 MB' : 'Bad request',
+      });
       return;
     }
     console.error('[api] unexpected error:', err);
