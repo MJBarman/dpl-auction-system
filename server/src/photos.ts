@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { StorageClient } from '@supabase/storage-js';
 import { AuctionError } from './engine';
 
 // Player photos live in a Supabase Storage bucket. The server is the only
@@ -8,13 +8,18 @@ import { AuctionError } from './engine';
 // Every upload gets a fresh object path, which makes the public URL immutable:
 // projectors and phones can cache it forever and a re-render during a bidding
 // war never triggers a refetch. Updating a photo swaps the path (and URL).
+//
+// We use @supabase/storage-js directly rather than the full supabase-js
+// client: supabase-js eagerly constructs a Realtime client, which requires a
+// native WebSocket (Node 22+) and crashes on hosts running older Node.
+// storage-js is plain fetch and works on any Node version.
 
 const SUPABASE_URL = (process.env.SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
 const SECRET_KEY = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY ?? '').trim();
 export const PHOTO_BUCKET = process.env.SUPABASE_PHOTO_BUCKET || 'player-photos';
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024; // keep in sync with the bucket's file_size_limit
 
-let client: SupabaseClient | null = null;
+let client: StorageClient | null = null;
 
 export function photosConfigured(): boolean {
   return Boolean(SUPABASE_URL && SECRET_KEY);
@@ -22,11 +27,12 @@ export function photosConfigured(): boolean {
 
 function bucket() {
   if (!client) {
-    client = createClient(SUPABASE_URL, SECRET_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
+    client = new StorageClient(`${SUPABASE_URL}/storage/v1`, {
+      apikey: SECRET_KEY,
+      Authorization: `Bearer ${SECRET_KEY}`,
     });
   }
-  return client.storage.from(PHOTO_BUCKET);
+  return client.from(PHOTO_BUCKET);
 }
 
 /** Public CDN URL for a stored photo (immutable — see note above). */

@@ -60,6 +60,7 @@ server.listen(PORT, HOST, () => {
   console.log('');
   console.log('  DPL Season 4 Auction System');
   console.log('  ---------------------------');
+  console.log(`  Node:    ${process.version}`);
   console.log(`  Local:   http://localhost:${PORT}`);
   for (const addr of lanAddresses()) {
     console.log(`  Network: http://${addr}:${PORT}   (open this on phones on the same Wi-Fi)`);
