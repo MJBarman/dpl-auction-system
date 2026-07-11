@@ -2,7 +2,7 @@ import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store';
 import { LotView, PlayerView, StateView, Tier } from '../types';
-import { fmt, OfflineBanner, PlayerPhoto, statVal } from '../ui';
+import { fmt, formatClock, OfflineBanner, PlayerPhoto, statVal, TIMEOUT_COUNTDOWN_MS, useCountdown } from '../ui';
 import '../screen.css';
 
 /* Animation keying discipline (see screen.css header):
@@ -381,9 +381,25 @@ function ScreenIdle({ state }: { state: StateView }) {
 function TimeoutBoard({ state }: { state: StateView }) {
   const t = state.timeout!;
   const poolLeft = state.phase.remainingInPhase;
+  // Cosmetic countdown driven by the server-stamped start, so late-joining
+  // screens land on the same reading. Falls back to the full duration for the
+  // single render before the first tick, so it never flashes 0:00.
+  const secs = useCountdown(t.startedAt + TIMEOUT_COUNTDOWN_MS, state.serverTime);
+  const finished = secs !== null && secs <= 0;
+  const shown = secs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000);
   return (
     <div className="scr-timeout">
       <div className="scr-to-badge"><i aria-hidden />STRATEGIC TIMEOUT</div>
+      <div className={`scr-to-timer${finished ? ' done' : ''}${!finished && shown <= 30 ? ' urgent' : ''}`} role="timer" aria-live="off">
+        {finished ? (
+          <span className="scr-to-timer-done">Countdown finished</span>
+        ) : (
+          <>
+            <span className="scr-to-timer-clock">{formatClock(shown)}</span>
+            <span className="scr-to-timer-label">Time remaining</span>
+          </>
+        )}
+      </div>
       <div className="scr-final-sub">
         {t.setNumber !== null ? `Set ${t.setNumber} complete · ` : ''}
         {poolLeft} player{poolLeft === 1 ? '' : 's'} still in the pool

@@ -5,7 +5,8 @@ import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { PlayerView, StateView, WatchlistEntry } from '../types';
 import {
-  ConnectionDot, fmt, Modal, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge, useAction, useCountdown,
+  ConnectionDot, fmt, formatClock, Modal, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge,
+  TIMEOUT_COUNTDOWN_MS, useAction, useCountdown,
 } from '../ui';
 
 export default function TeamPage() {
@@ -106,6 +107,12 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
   const lot = state.lot;
   const player = lot ? state.players.find((p) => p.id === lot.playerId) : null;
   const timer = useCountdown(lot?.timerEndsAt ?? null, state.serverTime);
+  // Cosmetic strategic-timeout countdown (see TIMEOUT_COUNTDOWN_MS). Hook runs
+  // unconditionally; null endsAt when no timeout is active.
+  const timeoutSecs = useCountdown(
+    state.timeout ? state.timeout.startedAt + TIMEOUT_COUNTDOWN_MS : null,
+    state.serverTime,
+  );
   const myBidState = lot?.teamBidState.find((x) => x.teamId === teamId);
   const leading = lot?.leadingTeamId === teamId;
   const wl = player ? watchlist[player.id] : undefined;
@@ -123,6 +130,11 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
         {(state.stage === 'live' || state.stage === 'accelerated') && !player && state.timeout && (
           <div className="card center-note timeout-card">
             <h2>⏸ Strategic timeout</h2>
+            <div className={`timeout-timer${timeoutSecs !== null && timeoutSecs <= 0 ? ' done' : ''}`} role="timer" aria-live="off">
+              {timeoutSecs !== null && timeoutSecs <= 0
+                ? 'Countdown finished'
+                : `⏱ ${formatClock(timeoutSecs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000))} remaining`}
+            </div>
             <p className="muted">
               {state.timeout.setNumber !== null
                 ? `Set ${state.timeout.setNumber} is done — ${state.settings.timeoutEvery} players auctioned. `

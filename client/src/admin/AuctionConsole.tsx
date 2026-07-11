@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { StateView } from '../types';
 import {
-  fmt, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge, useAction, useCountdown,
+  fmt, formatClock, PlayerBadges, PlayerPhoto, StatsGrid, TIMEOUT_COUNTDOWN_MS, TierBadge, useAction, useCountdown,
 } from '../ui';
 
 export default function AuctionConsole({ state }: { state: StateView }) {
@@ -108,9 +108,16 @@ function TimeoutPanel({ state }: { state: StateView }) {
   const run = useAction();
   const t = state.timeout!;
   const every = state.settings.timeoutEvery;
+  const secs = useCountdown(t.startedAt + TIMEOUT_COUNTDOWN_MS, state.serverTime);
+  const finished = secs !== null && secs <= 0;
   return (
     <div className="card timeout-card">
       <h2>⏸ Strategic timeout</h2>
+      <div className={`timeout-timer${finished ? ' done' : ''}`} role="timer" aria-live="off">
+        {finished
+          ? 'Countdown finished'
+          : `⏱ ${formatClock(secs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000))} remaining`}
+      </div>
       <p className="muted">
         {t.setNumber !== null
           ? `Set ${t.setNumber} complete — ${every} players auctioned. `

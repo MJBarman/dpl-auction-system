@@ -111,6 +111,19 @@ export function useCountdown(endsAt: number | null, serverTime: number): number 
   return left;
 }
 
+/** Display length of the strategic-timeout countdown. Cosmetic only — the break
+ *  still runs until the auctioneer resumes; this just tells the room how much of
+ *  the intended 5-minute pause is left. */
+export const TIMEOUT_COUNTDOWN_MS = 5 * 60 * 1000;
+
+/** Whole-second count → m:ss (e.g. 300 → "5:00", 7 → "0:07", 0 → "0:00"). */
+export function formatClock(totalSecs: number): string {
+  const t = Math.max(0, Math.floor(totalSecs));
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function ConnectionDot({ connected }: { connected: boolean }) {
   return (
     <span className={`conn-dot ${connected ? 'on' : 'off'}`} title={connected ? 'Live' : 'Reconnecting…'}>
