@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { clearSession, loadSession } from '../session';
@@ -45,7 +45,10 @@ export default function TeamPage() {
           <span className="dot big-dot" style={{ background: team.color }} />
           <div>
             <div className="brand">{team.name}</div>
-            <div className="muted small">Capt. {team.captain} — your private dashboard</div>
+            <div className="muted small">
+              Capt. {team.captain} — your private dashboard
+              {you.role === 'team' && you.deviceTag ? ` · device #${you.deviceTag}` : ''}
+            </div>
           </div>
         </div>
         <nav className="tabs">
@@ -117,7 +120,20 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
           </div>
         )}
         {state.stage === 'completed' && <div className="card center-note"><h2>🏁 Auction complete</h2><p className="muted">Check “My squad” for your final roster.</p></div>}
-        {(state.stage === 'live' || state.stage === 'accelerated') && !player && (
+        {(state.stage === 'live' || state.stage === 'accelerated') && !player && state.timeout && (
+          <div className="card center-note timeout-card">
+            <h2>⏸ Strategic timeout</h2>
+            <p className="muted">
+              {state.timeout.setNumber !== null
+                ? `Set ${state.timeout.setNumber} is done — ${state.settings.timeoutEvery} players auctioned. `
+                : 'The auctioneer has called a break. '}
+              Time to regroup: {fmt(team.remaining)} pts left, {team.count}/{state.settings.maxSquad} bought,
+              {' '}{state.phase.remainingInPhase} player{state.phase.remainingInPhase === 1 ? '' : 's'} still to come.
+            </p>
+            <p className="muted small">Bidding reopens when the auctioneer resumes. Use “Pool &amp; watchlist” to plan your next targets.</p>
+          </div>
+        )}
+        {(state.stage === 'live' || state.stage === 'accelerated') && !player && !state.timeout && (
           <div className="card center-note">
             <h2>Between lots</h2>
             <p className="muted">The auctioneer is drawing the next player…</p>
@@ -156,10 +172,14 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
             {player.notes && <p className="notes">{player.notes}</p>}
 
             {state.settings.bidderBidding ? (
-              <button
-                className={`btn primary bid-big${leading ? ' leading' : ''}`}
-                disabled={!myBidState?.canBid || bidding}
-                onClick={async () => {
+              <HoldBidButton
+                lotId={lot.id}
+                nextMinBid={lot.nextMinBid}
+                canBid={!!myBidState?.canBid}
+                reason={myBidState?.reason ?? null}
+                leading={leading}
+                busy={bidding}
+                onBid={async () => {
                   // Quote the lot and the exact amount on the button: if the
                   // auction moved on (or a rival bid landed first), the server
                   // rejects instead of bidding blind on the wrong thing.
@@ -170,13 +190,7 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                     setBidding(false);
                   }
                 }}
-              >
-                {leading
-                  ? 'You lead — waiting for a counter-bid'
-                  : myBidState?.canBid
-                    ? `BID ${fmt(lot.nextMinBid)} PTS`
-                    : myBidState?.reason ?? 'Cannot bid'}
-              </button>
+              />
             ) : (
               <p className="muted small center-note">Call your bids out to the auctioneer — device bidding is off.</p>
             )}
@@ -208,6 +222,97 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
         <RecentSales state={state} teamId={teamId} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Press-and-hold bid button. A bid is placed only after an unbroken 600ms
+ * hold — a quick tap, a brush while scrolling, or a pointer that slides off
+ * the button does nothing. The button also stays locked for a moment after a
+ * new player appears, so a tap aimed at the previous screen can never land on
+ * a lot that just materialised under the finger. Both protections exist
+ * because one accidental tap here used to place a real, instant bid.
+ */
+function HoldBidButton({ lotId, nextMinBid, canBid, reason, leading, busy, onBid }: {
+  lotId: string;
+  nextMinBid: number;
+  canBid: boolean;
+  reason: string | null;
+  leading: boolean;
+  busy: boolean;
+  onBid: () => void;
+}) {
+  const HOLD_MS = 600; // deliberate, but quick enough for a bidding war
+  const ARM_MS = 700;  // input ignored right after a new lot fills the screen
+  const [armed, setArmed] = useState(false);
+  const [holding, setHolding] = useState(false);
+  const timer = useRef<number | null>(null);
+  const fire = useRef(onBid);
+  fire.current = onBid; // the hold always bids exactly what is on screen now
+
+  const cancelHold = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setHolding(false);
+  }, []);
+
+  // New lot on screen: abort any hold in progress and re-arm after a beat.
+  useEffect(() => {
+    setArmed(false);
+    cancelHold();
+    const t = window.setTimeout(() => setArmed(true), ARM_MS);
+    return () => window.clearTimeout(t);
+  }, [lotId, cancelHold]);
+
+  const disabled = !canBid || busy;
+  useEffect(() => {
+    if (disabled) cancelHold(); // e.g. another of our devices took the lead mid-hold
+  }, [disabled, cancelHold]);
+
+  const startHold = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (!armed || disabled || timer.current !== null) return;
+    setHolding(true);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setHolding(false);
+      fire.current();
+    }, HOLD_MS);
+  };
+
+  const label = leading
+    ? 'You lead — waiting for a counter-bid'
+    : !canBid
+      ? reason ?? 'Cannot bid'
+      : busy
+        ? 'Placing your bid…'
+        : !armed
+          ? 'Get ready…'
+          : holding
+            ? `Keep holding — bidding ${fmt(nextMinBid)} pts`
+            : `HOLD TO BID ${fmt(nextMinBid)} PTS`;
+
+  return (
+    <>
+      <button
+        className={`btn primary bid-big hold-bid${leading ? ' leading' : ''}${holding ? ' holding' : ''}`}
+        disabled={disabled || !armed}
+        onPointerDown={startHold}
+        onPointerUp={cancelHold}
+        onPointerLeave={cancelHold}
+        onPointerCancel={cancelHold}
+        onContextMenu={(e) => e.preventDefault()}
+        style={{ ['--hold-ms' as any]: `${HOLD_MS}ms` }}
+      >
+        <span className="hold-fill" aria-hidden />
+        <span className="hold-label">{label}</span>
+      </button>
+      {canBid && !leading && !busy && (
+        <p className="muted small center-note hold-hint">
+          Press and <b>hold</b> to bid — quick taps do nothing, so a slip can't place a bid.
+        </p>
+      )}
+    </>
   );
 }
 

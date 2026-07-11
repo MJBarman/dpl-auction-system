@@ -183,6 +183,10 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 }
 .tier-chip.active { outline: 2px solid var(--accent); }
 .tier-chip .muted { font-weight: 500; font-size: 11.5px; }
+.tier-chip.timeout-chip { border-color: var(--warn); color: var(--warn); }
+
+.timeout-card { border-color: var(--warn); }
+.timeout-card > h2 { color: var(--warn); }
 
 .lot-card.you-lead { outline: 2px solid var(--ok); }
 .lot-head { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
@@ -253,6 +257,24 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .center-note { text-align: center; padding: 32px 16px; }
 .bid-big { width: 100%; margin-top: 14px; padding: 16px; font-size: 19px; font-weight: 800; border-radius: 12px; }
 .bid-big.leading { background: var(--ok); border-color: var(--ok); color: #06220f; }
+
+/* Hold-to-bid: a deliberate press, not a tap. The fill sweeps across the
+   button for the duration of the hold; releasing early snaps it back. */
+.hold-bid {
+  position: relative; overflow: hidden;
+  touch-action: manipulation;             /* no double-tap zoom; scrolling still cancels the hold */
+  user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;            /* no iOS long-press callout */
+}
+.hold-bid .hold-fill {
+  position: absolute; inset: 0; pointer-events: none;
+  background: rgba(255, 255, 255, .28);
+  transform: scaleX(0); transform-origin: left center;
+}
+.hold-bid.holding .hold-fill { transform: scaleX(1); transition: transform var(--hold-ms, 600ms) linear; }
+.hold-bid .hold-label { position: relative; z-index: 1; }
+.hold-hint { margin-top: 6px; }
+
 .wl-hint { color: #fcd34d; font-size: 13px; margin-top: 4px; font-weight: 600; }
 .pool-table td { font-size: 13.5px; }
 

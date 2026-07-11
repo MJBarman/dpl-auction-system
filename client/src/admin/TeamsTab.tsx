@@ -45,6 +45,7 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
   };
 
   const roster = state.players.filter((p) => p.status === 'sold' && p.teamId === team.id);
+  const devices = state.admin?.teamSessions?.find((s) => s.teamId === team.id)?.devices ?? 0;
 
   return (
     <div className="card team-card" style={{ borderTop: `3px solid ${team.color}` }}>
@@ -75,6 +76,13 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
             >
               New code
             </button>
+          </div>
+          <div className={`small ${devices > 1 ? 'warn-text' : 'muted'}`}>
+            {devices === 0
+              ? 'No devices signed in yet'
+              : devices === 1
+                ? '1 device signed in'
+                : `⚠ ${devices} devices signed in — every one of them can bid. Unexpected? "New code" logs them all out.`}
           </div>
         </div>
       </div>

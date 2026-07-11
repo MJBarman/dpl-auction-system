@@ -25,6 +25,7 @@ export interface Settings {
   reservePerSlot: number;
   increments: IncrementRung[];
   bidderBidding: boolean;
+  timeoutEvery: number; // strategic timeout after every N main-round players (0 = off)
   tiers: Tier[];
 }
 
@@ -77,6 +78,7 @@ export interface Bid {
   amount: number;
   by: 'admin' | 'team';
   ts: number;
+  deviceTag?: string; // fingerprint of the signed-in device that sent it
 }
 
 export interface LotView {
@@ -110,7 +112,12 @@ export interface WatchlistEntry {
 export type You =
   | { role: 'spectator' }
   | { role: 'admin' }
-  | { role: 'team'; teamId: string; watchlist: Record<string, WatchlistEntry> };
+  | { role: 'team'; teamId: string; deviceTag?: string; watchlist: Record<string, WatchlistEntry> };
+
+export interface TimeoutInfo {
+  startedAt: number;
+  setNumber: number | null; // which set just completed; null = called manually
+}
 
 export interface StateView {
   serverTime: number;
@@ -121,6 +128,7 @@ export interface StateView {
   teams: TeamView[];
   players: PlayerView[];
   lot: LotView | null;
+  timeout: TimeoutInfo | null;
   progress: {
     total: number;
     sold: number;
@@ -132,12 +140,14 @@ export interface StateView {
     remainingInPhase: number;
     unsold: number;
     mainRoundDone: boolean;
+    auctionedInMain: number;
   };
   undoLabel: string | null;
   you: You;
   admin?: {
     teamCodes: { teamId: string; code: string }[];
     photoCodes: { playerId: string; code: string }[];
+    teamSessions: { teamId: string; devices: number }[];
     warnings: string[];
   };
 }

@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
-  AuctionSnapshot, Lot, Player, Settings, State, Team, TeamSummary, Tier,
+  AuctionSnapshot, Lot, Player, Settings, State, Team, TeamSummary, Tier, TimeoutInfo,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -107,6 +107,12 @@ function requireLive(state: State): void {
   }
 }
 
+function requireNoTimeout(state: State): void {
+  if (state.timeout) {
+    throw new AuctionError('Strategic timeout in progress — resume the auction first');
+  }
+}
+
 export function startAuction(state: State): void {
   if (state.stage !== 'setup') throw new AuctionError('Auction has already started');
   if (state.teams.length < 2) throw new AuctionError('Need at least 2 teams to start');
@@ -114,6 +120,8 @@ export function startAuction(state: State): void {
   state.stage = 'live';
   state.currentTierKey = sortedTiers(state.settings)[0]?.key ?? null;
   state.lot = null;
+  state.mainAuctionCount = 0;
+  state.timeout = null;
 }
 
 /** Players still to be offered in the current phase. */
@@ -131,6 +139,7 @@ export function eligiblePool(state: State): Player[] {
  */
 export function drawNext(state: State): Player | null {
   requireLive(state);
+  requireNoTimeout(state);
   if (state.lot) throw new AuctionError('Close the current lot before drawing the next player');
 
   if (state.stage === 'accelerated') {
@@ -159,6 +168,7 @@ export function drawNext(state: State): Player | null {
 
 export function openLot(state: State, playerId: string, now: number): void {
   requireLive(state);
+  requireNoTimeout(state);
   if (state.lot) throw new AuctionError('Another player is already up for auction');
   const player = getPlayer(state, playerId);
   if (player.status === 'sold') throw new AuctionError(`${player.name} is already sold`);
@@ -217,7 +227,7 @@ export function checkBid(state: State, teamId: string, amount: number): BidCheck
 
 export function placeBid(
   state: State, teamId: string, amount: number | undefined, by: 'admin' | 'team', now: number,
-  lotId?: string,
+  lotId?: string, deviceTag?: string,
 ): void {
   requireLive(state);
   const lot = requireSameLot(state, lotId);
@@ -225,12 +235,12 @@ export function placeBid(
   const bidAmount = amount ?? nextMinBid(state);
   const check = checkBid(state, teamId, bidAmount);
   if (!check.ok) throw new AuctionError(check.reason ?? 'Invalid bid');
-  lot.bids.push({ teamId, amount: bidAmount, by, ts: now });
+  lot.bids.push({ teamId, amount: bidAmount, by, ts: now, ...(deviceTag ? { deviceTag } : {}) });
   lot.timerEndsAt = null; // any bid resets the hammer timer
 }
 
-export function undoBid(state: State): void {
-  const lot = requireLot(state);
+export function undoBid(state: State, lotId?: string): void {
+  const lot = requireSameLot(state, lotId);
   if (lot.bids.length === 0) throw new AuctionError('No bids to undo');
   lot.bids.pop();
   lot.timerEndsAt = null;
@@ -242,6 +252,21 @@ export interface HammerGuard {
    *  hammer if another bid slipped in between glance and tap. */
   expectedTeamId?: string;
   expectedPrice?: number;
+}
+
+/**
+ * Rule: after every `timeoutEvery` players auctioned in the main round (sold
+ * OR unsold — every hammer counts), the set ends with a strategic timeout.
+ * The auction stays paused until the auctioneer resumes it. The accelerated
+ * round runs uninterrupted.
+ */
+function recordHammer(state: State, now: number): void {
+  if (state.stage !== 'live') return;
+  state.mainAuctionCount += 1;
+  const every = state.settings.timeoutEvery;
+  if (every > 0 && state.mainAuctionCount % every === 0) {
+    state.timeout = { startedAt: now, setNumber: state.mainAuctionCount / every };
+  }
 }
 
 export function sellLot(state: State, now: number, guard: HammerGuard = {}): { player: Player; teamId: string; price: number } {
@@ -262,10 +287,11 @@ export function sellLot(state: State, now: number, guard: HammerGuard = {}): { p
   player.price = leading.amount;
   player.round = state.stage === 'accelerated' ? 'accelerated' : 'main';
   state.lot = null;
+  recordHammer(state, now);
   return { player, teamId: leading.teamId, price: leading.amount };
 }
 
-export function passLot(state: State, lotId?: string): Player {
+export function passLot(state: State, lotId?: string, now = Date.now()): Player {
   requireLive(state);
   const lot = requireSameLot(state, lotId);
   if (lot.bids.length > 0) {
@@ -277,6 +303,7 @@ export function passLot(state: State, lotId?: string): Player {
   player.price = null;
   player.round = null;
   state.lot = null;
+  recordHammer(state, now);
   return player;
 }
 
@@ -288,6 +315,22 @@ export function cancelLot(state: State): void {
     player.offeredInPass = false;
   }
   state.lot = null;
+}
+
+// --- Strategic timeouts --------------------------------------------------------
+
+/** Auctioneer calls an extra break between lots (outside the every-N cycle). */
+export function startTimeout(state: State, now: number): TimeoutInfo {
+  requireLive(state);
+  if (state.lot) throw new AuctionError('Close the current lot before calling a timeout');
+  if (state.timeout) throw new AuctionError('A strategic timeout is already in progress');
+  state.timeout = { startedAt: now, setNumber: null };
+  return state.timeout;
+}
+
+export function resumeAuction(state: State): void {
+  if (!state.timeout) throw new AuctionError('No strategic timeout is in progress');
+  state.timeout = null;
 }
 
 // --- Phase transitions -------------------------------------------------------
@@ -306,6 +349,7 @@ export function startAccelerated(state: State): void {
   }
   if (unsoldCount(state) === 0) throw new AuctionError('No unsold players — nothing to accelerate');
   state.stage = 'accelerated';
+  state.timeout = null; // the end-of-sets break flows straight into the accelerated round
   for (const p of state.players) p.offeredInPass = false;
 }
 
@@ -390,12 +434,15 @@ export function completeAuction(state: State, force = false): void {
   }
   state.stage = 'completed';
   state.lot = null;
+  state.timeout = null;
 }
 
 export function resetAuction(state: State): void {
   state.stage = 'setup';
   state.currentTierKey = null;
   state.lot = null;
+  state.mainAuctionCount = 0;
+  state.timeout = null;
   for (const p of state.players) {
     p.status = 'available';
     p.teamId = null;
@@ -414,6 +461,8 @@ export function takeSnapshot(state: State, label: string, now: number): AuctionS
     stage: state.stage,
     currentTierKey: state.currentTierKey,
     lot: state.lot ? JSON.parse(JSON.stringify(state.lot)) : null,
+    mainAuctionCount: state.mainAuctionCount,
+    timeout: state.timeout ? { ...state.timeout } : null,
     players: state.players.map((p) => ({
       id: p.id,
       status: p.status,
@@ -429,6 +478,9 @@ export function restoreSnapshot(state: State, snap: AuctionSnapshot): void {
   state.stage = snap.stage;
   state.currentTierKey = snap.currentTierKey;
   state.lot = snap.lot ? JSON.parse(JSON.stringify(snap.lot)) : null;
+  // Older snapshots (pre-timeout feature) leave the current values in place.
+  if (snap.mainAuctionCount !== undefined) state.mainAuctionCount = snap.mainAuctionCount;
+  if (snap.timeout !== undefined) state.timeout = snap.timeout ? { ...snap.timeout } : null;
   const byId = new Map(snap.players.map((p) => [p.id, p]));
   for (const p of state.players) {
     const s = byId.get(p.id);

@@ -28,6 +28,7 @@ export interface Settings {
   reservePerSlot: number; // pts reserved per unfilled mandatory slot (guardrail)
   increments: IncrementRung[];
   bidderBidding: boolean; // captains may bid from their own devices
+  timeoutEvery: number;   // strategic timeout after every N main-round players (0 = off)
   tiers: Tier[];
 }
 
@@ -77,6 +78,7 @@ export interface Bid {
   amount: number;
   by: 'admin' | 'team'; // who recorded it
   ts: number;
+  deviceTag?: string;   // fingerprint of the signed-in device that sent it
 }
 
 export interface Lot {
@@ -95,6 +97,12 @@ export interface WatchlistEntry {
   note?: string;
 }
 
+/** Active strategic timeout — the auction pauses until the auctioneer resumes. */
+export interface TimeoutInfo {
+  startedAt: number;
+  setNumber: number | null; // which set just completed; null = called manually
+}
+
 export interface State {
   settings: Settings;
   teams: Team[];
@@ -102,6 +110,8 @@ export interface State {
   stage: Stage;
   currentTierKey: string | null;
   lot: Lot | null;
+  mainAuctionCount: number; // players hammered (sold/unsold) in the main round
+  timeout: TimeoutInfo | null;
   // teamId -> playerId -> entry (private captain planning data)
   watchlists: Record<string, Record<string, WatchlistEntry>>;
   version: number; // bumped on every mutation
@@ -113,6 +123,8 @@ export interface AuctionSnapshot {
   stage: Stage;
   currentTierKey: string | null;
   lot: Lot | null;
+  mainAuctionCount?: number;
+  timeout?: TimeoutInfo | null;
   players: Pick<Player, 'id' | 'status' | 'teamId' | 'price' | 'round' | 'offeredInPass'>[];
 }
 

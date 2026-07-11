@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { AuctionSnapshot, EventRow, State } from './types';
-import { buildInitialState, ensurePhotoCodes } from './seed';
+import { buildInitialState, ensurePhotoCodes, ensureTimeoutFields } from './seed';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const MAX_UNDO = 200;
@@ -42,7 +42,9 @@ export class Store {
     const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get('state') as { value: string } | undefined;
     if (row) {
       this.state = JSON.parse(row.value) as State;
-      if (ensurePhotoCodes(this.state)) this.saveState(); // pre-photo-feature database
+      // Migrations for databases created before newer features.
+      const migrated = [ensurePhotoCodes(this.state), ensureTimeoutFields(this.state)];
+      if (migrated.some(Boolean)) this.saveState();
     } else {
       this.state = buildInitialState();
       this.saveState();
@@ -61,6 +63,7 @@ export class Store {
 
   replaceState(next: State): void {
     ensurePhotoCodes(next); // restored backups may predate the photo feature
+    ensureTimeoutFields(next);
     this.state = next;
     this.undoStack = [];
     this.persistUndo();
@@ -123,6 +126,14 @@ export class Store {
 
   deleteSessionsForTeam(teamId: string): void {
     this.db.prepare('DELETE FROM sessions WHERE teamId = ?').run(teamId);
+  }
+
+  /** How many devices currently hold a live session for this team. */
+  countSessionsForTeam(teamId: string): number {
+    const row = this.db
+      .prepare('SELECT COUNT(*) AS n FROM sessions WHERE teamId = ?')
+      .get(teamId) as { n: number };
+    return row.n;
   }
 
   // --- admin pin (kv) ---

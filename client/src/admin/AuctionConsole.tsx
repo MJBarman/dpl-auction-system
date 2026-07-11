@@ -16,7 +16,11 @@ export default function AuctionConsole({ state }: { state: StateView }) {
         <div className="console-left">
           {state.stage === 'setup' && <SetupPanel state={state} />}
           {(state.stage === 'live' || state.stage === 'accelerated') &&
-            (lotPlayer ? <LotCard state={state} /> : <BetweenLots state={state} />)}
+            (lotPlayer
+              ? <LotCard state={state} />
+              : state.timeout
+                ? <TimeoutPanel state={state} />
+                : <BetweenLots state={state} />)}
           {state.stage === 'completed' && <ResultsPanel state={state} />}
         </div>
         <div className="console-right">
@@ -36,7 +40,21 @@ export default function AuctionConsole({ state }: { state: StateView }) {
   );
 }
 
+/** Set arithmetic for the every-N-players timeout cycle (main round only). */
+function setInfo(state: StateView) {
+  const every = state.settings.timeoutEvery;
+  const count = state.phase.auctionedInMain;
+  if (every <= 0) return null;
+  return {
+    every,
+    inSet: count % every,                    // players auctioned in the running set
+    setNumber: Math.floor(count / every) + 1, // set currently being auctioned
+    untilBreak: every - (count % every),
+  };
+}
+
 function StageBar({ state }: { state: StateView }) {
+  const sets = state.stage === 'live' ? setInfo(state) : null;
   return (
     <div className="stagebar">
       {state.progress.perTier.map((t) => {
@@ -53,6 +71,14 @@ function StageBar({ state }: { state: StateView }) {
         <span>Total</span>
         <span className="muted">{state.progress.sold}/{state.progress.total} sold</span>
       </div>
+      {sets && (
+        <div className={`tier-chip${state.timeout ? ' timeout-chip' : ''}`}>
+          <span>{state.timeout ? '⏸ Timeout' : `Set ${sets.setNumber}`}</span>
+          <span className="muted">
+            {state.timeout ? 'auction paused' : `${sets.inSet}/${sets.every} auctioned`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -78,6 +104,51 @@ function SetupPanel({ state }: { state: StateView }) {
   );
 }
 
+function TimeoutPanel({ state }: { state: StateView }) {
+  const run = useAction();
+  const t = state.timeout!;
+  const every = state.settings.timeoutEvery;
+  return (
+    <div className="card timeout-card">
+      <h2>⏸ Strategic timeout</h2>
+      <p className="muted">
+        {t.setNumber !== null
+          ? `Set ${t.setNumber} complete — ${every} players auctioned. `
+          : 'Break called by the auctioneer. '}
+        {state.phase.remainingInPhase > 0
+          ? `${state.phase.remainingInPhase} player(s) still in the pool.`
+          : 'No players left in this round.'}
+        {' '}Every screen is showing the team standings until you resume.
+      </p>
+      <div className="results-grid">
+        {state.teams.map((team) => {
+          const roster = state.players
+            .filter((p) => p.status === 'sold' && p.teamId === team.id)
+            .sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+          return (
+            <div key={team.id} className="result-team" style={{ borderColor: team.color }}>
+              <h3 style={{ color: team.color }}>{team.name}</h3>
+              <div className="muted small">
+                {fmt(team.remaining)} pts left · {team.count}/{state.settings.maxSquad} players
+                {team.full ? ' · FULL' : ` · max bid ${fmt(team.maxBid)}`}
+              </div>
+              <ul>
+                {roster.length === 0 && <li className="muted">No players yet</li>}
+                {roster.map((p) => (
+                  <li key={p.id}>{p.name} <span className="muted">({fmt(p.price)})</span></li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/resume'), 'Auction resumed')}>
+        ▶ Resume the auction
+      </button>
+    </div>
+  );
+}
+
 function BetweenLots({ state }: { state: StateView }) {
   const run = useAction();
   const [pickId, setPickId] = useState('');
@@ -86,6 +157,7 @@ function BetweenLots({ state }: { state: StateView }) {
     return state.players.filter((p) => p.status === 'available');
   }, [state]);
   const phaseDone = state.phase.remainingInPhase === 0;
+  const sets = state.stage === 'live' ? setInfo(state) : null;
 
   return (
     <div className="card">
@@ -94,6 +166,7 @@ function BetweenLots({ state }: { state: StateView }) {
           <h2>{state.stage === 'accelerated' ? 'Accelerated round' : 'Next lot'}</h2>
           <p className="muted">
             {state.phase.remainingInPhase} player(s) left in this {state.stage === 'accelerated' ? 'pass' : 'round'}.
+            {sets && ` Strategic timeout after ${sets.untilBreak} more player${sets.untilBreak === 1 ? '' : 's'} (set ${sets.setNumber}: ${sets.inSet}/${sets.every}).`}
           </p>
           <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/next'))}>
             🎲 Draw next player
@@ -113,6 +186,14 @@ function BetweenLots({ state }: { state: StateView }) {
               onClick={() => run(() => api.post('/api/admin/auction/next', { playerId: pickId }).then(() => setPickId('')))}
             >
               Put up
+            </button>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <button
+              className="btn ghost"
+              onClick={() => run(() => api.post('/api/admin/auction/timeout'), 'Strategic timeout')}
+            >
+              ⏸ Call a strategic timeout now
             </button>
           </div>
         </>
@@ -203,7 +284,10 @@ function BidHistory({ state }: { state: StateView }) {
           <div key={lot.bids.length - i} className={`bid-row${i === 0 ? ' leading' : ''}`}>
             <span className="dot" style={{ background: team?.color }} />
             <span>{team?.name ?? b.teamId}</span>
-            <span className="muted small">{b.by === 'team' ? 'captain' : 'auctioneer'}</span>
+            <span className="muted small">
+              {b.by === 'team' ? 'captain' : 'auctioneer'}
+              {b.deviceTag ? ` · #${b.deviceTag}` : ''}
+            </span>
             <span className="bid-amt">{fmt(b.amount)}</span>
           </div>
         );
@@ -295,7 +379,7 @@ function BidPanel({ state }: { state: StateView }) {
         </button>
       </div>
       <div className="row">
-        <button className="btn ghost" disabled={lot.bids.length === 0} onClick={() => run(() => api.post('/api/admin/auction/undo-bid'))}>
+        <button className="btn ghost" disabled={lot.bids.length === 0} onClick={() => run(() => api.post('/api/admin/auction/undo-bid', { lotId: lot.id }))}>
           ↩ Undo last bid
         </button>
         <button className="btn ghost" onClick={() => run(() => api.post('/api/admin/auction/cancel-lot'))}>

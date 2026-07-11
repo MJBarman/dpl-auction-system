@@ -279,6 +279,109 @@ test('snapshot restore rolls back a sale exactly', () => {
   assert.equal(engine.teamSummary(s, 't1').spent, 0);
 });
 
+// ---- strategic timeouts -------------------------------------------------------------
+
+/** Hammer `n` players through the main round: odd draws sell to alternating
+ *  teams at base price, even draws go unsold. */
+function hammer(s: State, n: number, startTs = 100): void {
+  for (let i = 0; i < n; i++) {
+    const p = engine.drawNext(s);
+    assert.ok(p, `draw ${i + 1} found a player`);
+    engine.openLot(s, p!.id, startTs + i);
+    if (i % 2 === 0) {
+      engine.placeBid(s, i % 4 < 2 ? 't1' : 't2', undefined, 'admin', startTs + i);
+      engine.sellLot(s, startTs + i);
+    } else {
+      engine.passLot(s, undefined, startTs + i);
+    }
+  }
+}
+
+test('every 8th hammer ends the set with a strategic timeout; resume continues the cycle', () => {
+  const s = live();
+  assert.equal(s.settings.timeoutEvery, 8);
+  hammer(s, 7);
+  assert.equal(s.timeout, null);
+  assert.equal(s.mainAuctionCount, 7);
+  hammer(s, 1); // 8th player — sold or unsold, the set is over
+  assert.ok(s.timeout);
+  assert.equal(s.timeout!.setNumber, 1);
+  // The floor is closed until the auctioneer resumes.
+  assert.throws(() => engine.drawNext(s), /timeout/i);
+  assert.throws(() => engine.openLot(s, s.players.find((p) => p.status === 'available')!.id, 9), /timeout/i);
+  engine.resumeAuction(s);
+  assert.equal(s.timeout, null);
+  hammer(s, 8, 200); // next set of 8 → timeout again
+  assert.equal(s.timeout!.setNumber, 2);
+  assert.equal(s.mainAuctionCount, 16);
+});
+
+test('accelerated round runs without automatic timeouts', () => {
+  const s = live();
+  for (const p of s.players) p.status = 'sold';
+  const unsoldNames = ['Papu', 'Neev', 'Kabya'];
+  for (const name of unsoldNames) {
+    const p = playerByName(s, name);
+    p.status = 'unsold';
+    p.teamId = null;
+    p.price = null;
+  }
+  s.mainAuctionCount = 7; // one hammer away from a timeout in the main round
+  engine.startAccelerated(s);
+  const p = engine.drawNext(s)!;
+  engine.openLot(s, p.id, 1);
+  engine.passLot(s, undefined, 2);
+  assert.equal(s.timeout, null);
+  assert.equal(s.mainAuctionCount, 7); // accelerated hammers don't advance the sets
+});
+
+test('timeoutEvery = 0 disables the timeout cycle', () => {
+  const s = live();
+  s.settings.timeoutEvery = 0;
+  hammer(s, 9);
+  assert.equal(s.timeout, null);
+  assert.equal(s.mainAuctionCount, 9); // still counted for the record
+});
+
+test('auctioneer can call a manual timeout between lots, but not mid-lot or twice', () => {
+  const s = live();
+  engine.startTimeout(s, 50);
+  assert.equal(s.timeout!.setNumber, null); // manual break, not a set boundary
+  assert.throws(() => engine.startTimeout(s, 51), /already/i);
+  engine.resumeAuction(s);
+  assert.throws(() => engine.resumeAuction(s), /no strategic timeout/i);
+  const p = engine.drawNext(s)!;
+  engine.openLot(s, p.id, 52);
+  assert.throws(() => engine.startTimeout(s, 53), /current lot/i);
+});
+
+test('undoing the set-closing hammer also lifts the timeout', () => {
+  const s = live();
+  hammer(s, 7);
+  const p = engine.drawNext(s)!;
+  engine.openLot(s, p.id, 90);
+  engine.placeBid(s, 't3', undefined, 'admin', 91);
+  const snap = engine.takeSnapshot(s, 'Undo: sale', 92);
+  engine.sellLot(s, 93);
+  assert.ok(s.timeout);
+  engine.restoreSnapshot(s, snap);
+  assert.equal(s.timeout, null);
+  assert.equal(s.mainAuctionCount, 7);
+});
+
+test('starting the accelerated round or resetting clears any active timeout', () => {
+  const s = live();
+  for (const p of s.players) p.status = 'unsold';
+  engine.startTimeout(s, 10);
+  engine.startAccelerated(s);
+  assert.equal(s.timeout, null);
+  const s2 = live();
+  engine.startTimeout(s2, 10);
+  engine.resetAuction(s2);
+  assert.equal(s2.timeout, null);
+  assert.equal(s2.mainAuctionCount, 0);
+});
+
 // ---- completion & feasibility ---------------------------------------------------------------
 
 test('completeAuction refuses while players are unsold, unless forced', () => {
@@ -351,6 +454,29 @@ test('passLot with a stale lot id is rejected', () => {
   engine.passLot(s, staleLotId); // same lot — fine
   open(s, playerByName(s, 'Hirok Roy').id);
   assert.throws(() => engine.passLot(s, staleLotId), /too late/i);
+});
+
+test('bids carry the fingerprint of the device that placed them', () => {
+  const s = live();
+  open(s, playerByName(s, 'Kabya').id);
+  engine.placeBid(s, 't1', undefined, 'team', 1, s.lot!.id, 'a1b2c3');
+  assert.equal(s.lot!.bids[0].deviceTag, 'a1b2c3');
+  engine.placeBid(s, 't2', undefined, 'admin', 2, s.lot!.id);
+  assert.equal(s.lot!.bids[1].deviceTag, undefined); // optional — old callers still work
+});
+
+test('undo-bid quoting a closed lot id is rejected (late tap cannot pop the next lot\'s bid)', () => {
+  const s = live();
+  open(s, playerByName(s, 'Kabya').id);
+  const staleLotId = s.lot!.id;
+  engine.placeBid(s, 't1', undefined, 'admin', 1);
+  engine.sellLot(s, 2);
+  open(s, playerByName(s, 'Hirok Roy').id);
+  engine.placeBid(s, 't2', undefined, 'admin', 3);
+  assert.throws(() => engine.undoBid(s, staleLotId), /too late/i);
+  assert.equal(s.lot!.bids.length, 1); // t2's bid survived
+  engine.undoBid(s, s.lot!.id); // scoped to the lot on screen — works
+  assert.equal(s.lot!.bids.length, 0);
 });
 
 test('each opened lot gets a unique id', () => {

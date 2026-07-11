@@ -1,4 +1,4 @@
-import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { Store, Session } from './db';
 
@@ -24,6 +24,14 @@ export function ensurePin(store: Store): string {
 
 export function newToken(): string {
   return randomBytes(24).toString('hex');
+}
+
+/** Short public fingerprint of a session token. Safe to show in logs and on
+ *  screens (it's a truncated hash — the token cannot be recovered from it),
+ *  and stable for the life of the session, so every bid can be traced to the
+ *  exact signed-in device that placed it. */
+export function deviceTagOf(token: string): string {
+  return createHash('sha256').update(token).digest('hex').slice(0, 6);
 }
 
 export function safeEqual(a: string, b: string): boolean {

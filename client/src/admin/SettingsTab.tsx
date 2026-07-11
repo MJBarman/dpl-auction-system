@@ -15,6 +15,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
     maxSquad: String(s.maxSquad),
     reservePerSlot: String(s.reservePerSlot),
     bidderBidding: s.bidderBidding,
+    timeoutEvery: String(s.timeoutEvery),
   });
   const [increments, setIncrements] = useState<{ upTo: string; step: string }[]>(
     s.increments.map((r) => ({ upTo: r.upTo === null ? '' : String(r.upTo), step: String(r.step) })),
@@ -34,6 +35,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
         maxSquad: Number(form.maxSquad),
         reservePerSlot: Number(form.reservePerSlot),
         bidderBidding: form.bidderBidding,
+        timeoutEvery: Number(form.timeoutEvery),
         increments: increments.map((r): IncrementRung => ({
           upTo: r.upTo.trim() === '' ? null : Number(r.upTo),
           step: Number(r.step),
@@ -76,11 +78,15 @@ export default function SettingsTab({ state }: { state: StateView }) {
           <label>Min squad (bought)<input className="input" type="number" value={form.minSquad} onChange={(e) => setForm({ ...form, minSquad: e.target.value })} /></label>
           <label>Max squad (bought)<input className="input" type="number" value={form.maxSquad} onChange={(e) => setForm({ ...form, maxSquad: e.target.value })} /></label>
           <label>Reserve per slot (pts)<input className="input" type="number" value={form.reservePerSlot} onChange={(e) => setForm({ ...form, reservePerSlot: e.target.value })} /></label>
+          <label>Timeout after every … players<input className="input" type="number" min={0} value={form.timeoutEvery} onChange={(e) => setForm({ ...form, timeoutEvery: e.target.value })} /></label>
           <label className="check">
             <input type="checkbox" checked={form.bidderBidding} onChange={(e) => setForm({ ...form, bidderBidding: e.target.checked })} />
             Captains may bid from their own devices
           </label>
         </div>
+        <p className="muted small">
+          Strategic timeout: the main round pauses after every {form.timeoutEvery || '0'} players auctioned so teams can regroup — the projector shows the standings until the auctioneer resumes. Set to 0 to turn timeouts off. The accelerated round runs without breaks.
+        </p>
       </div>
 
       <div className="card">

@@ -1,7 +1,7 @@
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { Store } from './db';
 import {
-  loginRateLimiter, newToken, requireAdmin, requireTeam, safeEqual,
+  deviceTagOf, loginRateLimiter, newToken, requireAdmin, requireTeam, safeEqual,
 } from './auth';
 import * as engine from './engine';
 import { AuctionError } from './engine';
@@ -73,6 +73,7 @@ function cleanSettings(body: unknown, current: Settings, state: State): Settings
   if (b.maxSquad !== undefined) next.maxSquad = int(b.maxSquad, 'Maximum squad', { min: 1, max: 100 });
   if (b.reservePerSlot !== undefined) next.reservePerSlot = int(b.reservePerSlot, 'Reserve per slot', { min: 0, max: 1_000_000 });
   if (b.bidderBidding !== undefined) next.bidderBidding = Boolean(b.bidderBidding);
+  if (b.timeoutEvery !== undefined) next.timeoutEvery = int(b.timeoutEvery, 'Timeout frequency', { min: 0, max: 500 });
 
   if (next.minSquad > next.maxSquad) throw new AuctionError('Minimum squad cannot exceed maximum squad');
 
@@ -157,6 +158,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     if (!safeEqual(pin, getPin())) throw new AuctionError('Wrong PIN', 401);
     const token = newToken();
     store.createSession({ token, role: 'admin', teamId: null, createdAt: Date.now() });
+    store.logEvent('auth', `Auctioneer signed in (device #${deviceTagOf(token)})`);
     res.json({ token, role: 'admin' });
   });
 
@@ -166,6 +168,13 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     if (!team) throw new AuctionError('Unknown team code', 401);
     const token = newToken();
     store.createSession({ token, role: 'team', teamId: team.id, createdAt: Date.now() });
+    // Every join is on the record: a shared/forwarded link shows up here as
+    // extra devices, which is the first thing to check when a team disputes
+    // a bid ("we never tapped") — and the session count backs it up live.
+    const devices = store.countSessionsForTeam(team.id);
+    store.logEvent('auth', `${team.name} signed in on a new device (#${deviceTagOf(token)})${
+      devices > 1 ? ` — ${devices} devices now hold this team's code` : ''}`);
+    broadcast(); // admin Teams tab shows live device counts
     res.json({ token, role: 'team', teamId: team.id, teamName: team.name });
   });
 
@@ -252,14 +261,22 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     if (!store.state.settings.bidderBidding) {
       throw new AuctionError('Bidding from captain devices is disabled — call your bid out to the auctioneer');
     }
-    const amount = optionalInt(req.body?.amount, 'Bid amount', { min: 1 });
-    const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
+    // A captain's bid must quote exactly what their screen showed: which lot
+    // and what price. Blind bids ("whatever is open, at whatever the next
+    // step is") are refused outright — an out-of-date page can never place a
+    // bid its captain didn't see.
+    if (req.body?.lotId === undefined || req.body?.amount === undefined) {
+      throw new AuctionError('Your app is out of date — pull down to refresh the page and bid again');
+    }
+    const amount = int(req.body.amount, 'Bid amount', { min: 1 });
+    const lotId = str(req.body.lotId, 'Lot');
+    const deviceTag = deviceTagOf(req.session!.token);
     mutate(null, 'bid', () => {
-      engine.placeBid(store.state, teamId, amount ?? undefined, 'team', Date.now(), lotId);
+      engine.placeBid(store.state, teamId, amount, 'team', Date.now(), lotId, deviceTag);
     }, () => {
       const lot = store.state.lot!;
       const bid = lot.bids[lot.bids.length - 1];
-      return `${teamName(teamId)} bid ${bid.amount} pts on ${engine.getPlayer(store.state, lot.playerId).name} (from captain's device)`;
+      return `${teamName(teamId)} bid ${bid.amount} pts on ${engine.getPlayer(store.state, lot.playerId).name} (captain's device #${deviceTag})`;
     });
     res.json({ ok: true });
   });
@@ -485,21 +502,41 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   router.post('/admin/auction/bid', requireAdmin, (req, res) => {
     const teamId = str(req.body?.teamId, 'Team');
     const amount = optionalInt(req.body?.amount, 'Bid amount', { min: 1 });
-    const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
+    // Same rule as captains: the console quotes the lot it is showing, so a
+    // stale admin screen can't record a bid against the wrong player.
+    if (req.body?.lotId === undefined) {
+      throw new AuctionError('This console is out of date — refresh the page and record the bid again');
+    }
+    const lotId = str(req.body.lotId, 'Lot');
+    const deviceTag = deviceTagOf(req.session!.token);
     mutate(null, 'bid', () => {
-      engine.placeBid(store.state, teamId, amount ?? undefined, 'admin', Date.now(), lotId);
+      engine.placeBid(store.state, teamId, amount ?? undefined, 'admin', Date.now(), lotId, deviceTag);
     }, () => {
       const lot = store.state.lot!;
       const bid = lot.bids[lot.bids.length - 1];
-      return `${teamName(teamId)} bid ${bid.amount} pts on ${engine.getPlayer(store.state, lot.playerId).name}`;
+      return `${teamName(teamId)} bid ${bid.amount} pts on ${engine.getPlayer(store.state, lot.playerId).name} (recorded by auctioneer #${deviceTag})`;
     });
     res.json({ ok: true });
   });
 
-  router.post('/admin/auction/undo-bid', requireAdmin, (_req, res) => {
-    mutate(null, 'bid', () => engine.undoBid(store.state), () => 'Last bid withdrawn');
+  router.post('/admin/auction/undo-bid', requireAdmin, (req, res) => {
+    // Lot-scoped so a late tap can never pop a bid on the *next* player.
+    const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
+    mutate(null, 'bid', () => engine.undoBid(store.state, lotId), () => {
+      const lot = store.state.lot!;
+      return `Last bid withdrawn on ${engine.getPlayer(store.state, lot.playerId).name}`;
+    });
     res.json({ ok: true });
   });
+
+  // When a hammer completes a set, the engine pauses the auction — reflect it
+  // in the same audit line so the log reads like the room experienced it.
+  const timeoutNote = () => {
+    const t = store.state.timeout;
+    return t && t.setNumber !== null
+      ? ` · ⏸ set ${t.setNumber} complete (${store.state.settings.timeoutEvery} players) — strategic timeout`
+      : '';
+  };
 
   router.post('/admin/auction/sold', requireAdmin, (req, res) => {
     const guard: engine.HammerGuard = {
@@ -508,15 +545,27 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       expectedPrice: optionalInt(req.body?.expectedPrice, 'Expected price', { min: 0 }) ?? undefined,
     };
     const result = mutate('Undo: sale', 'sale', () => engine.sellLot(store.state, Date.now(), guard),
-      (r) => `SOLD — ${r.player.name} to ${teamName(r.teamId)} for ${r.price} pts`);
+      (r) => `SOLD — ${r.player.name} to ${teamName(r.teamId)} for ${r.price} pts${timeoutNote()}`);
     res.json({ ok: true, playerId: result.player.id, teamId: result.teamId, price: result.price });
   });
 
   router.post('/admin/auction/unsold', requireAdmin, (req, res) => {
     const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
-    const player = mutate('Undo: unsold', 'sale', () => engine.passLot(store.state, lotId),
-      (p) => `UNSOLD — ${p.name} (no bids)`);
+    const player = mutate('Undo: unsold', 'sale', () => engine.passLot(store.state, lotId, Date.now()),
+      (p) => `UNSOLD — ${p.name} (no bids)${timeoutNote()}`);
     res.json({ ok: true, playerId: player.id });
+  });
+
+  router.post('/admin/auction/timeout', requireAdmin, (_req, res) => {
+    mutate(null, 'auction', () => engine.startTimeout(store.state, Date.now()),
+      () => 'Strategic timeout — called by the auctioneer');
+    res.json({ ok: true });
+  });
+
+  router.post('/admin/auction/resume', requireAdmin, (_req, res) => {
+    mutate(null, 'auction', () => engine.resumeAuction(store.state),
+      () => 'Strategic timeout over — auction resumed');
+    res.json({ ok: true });
   });
 
   router.post('/admin/auction/cancel-lot', requireAdmin, (_req, res) => {

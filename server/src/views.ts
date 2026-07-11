@@ -1,3 +1,4 @@
+import { deviceTagOf } from './auth';
 import { Store, Session } from './db';
 import {
   allSummaries, basePriceOf, checkBid, eligiblePool, feasibilityWarnings,
@@ -55,11 +56,13 @@ export function publicState(state: State, undoLabel: string | null) {
       photoUrl: photoUrlFor(p.photoPath),
     })),
     lot: lotView,
+    timeout: state.timeout ?? null,
     progress: progress(state),
     phase: {
       remainingInPhase: state.stage === 'live' || state.stage === 'accelerated' ? eligiblePool(state).length : 0,
       unsold: unsoldCount(state),
       mainRoundDone: state.players.every((p) => p.status !== 'available'),
+      auctionedInMain: state.mainAuctionCount ?? 0,
     },
     undoLabel,
   };
@@ -74,6 +77,9 @@ export function statePayloadFor(store: Store, session: Session | undefined) {
       teamCodes: state.teams.map((t) => ({ teamId: t.id, code: t.code })),
       // Secret per-player photo-upload codes — admin-only, like team codes.
       photoCodes: state.players.map((p) => ({ playerId: p.id, code: p.photoCode ?? '' })),
+      // Live device counts: >1 device on a team's code is the tell-tale of a
+      // forwarded join link, and the fix is one tap away (New code).
+      teamSessions: state.teams.map((t) => ({ teamId: t.id, devices: store.countSessionsForTeam(t.id) })),
       warnings: feasibilityWarnings(state),
     };
   } else if (session?.role === 'team' && session.teamId) {
@@ -82,6 +88,7 @@ export function statePayloadFor(store: Store, session: Session | undefined) {
       ? {
           role: 'team',
           teamId: team.id,
+          deviceTag: deviceTagOf(session.token),
           watchlist: state.watchlists[team.id] ?? {},
         }
       : { role: 'spectator' };

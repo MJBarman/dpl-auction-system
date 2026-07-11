@@ -98,7 +98,8 @@ export default function ScreenPage() {
   const leadColor = leading?.color ?? tierColor;
 
   const stageLabel =
-    state.stage === 'setup' ? 'Starting soon'
+    state.timeout ? 'Strategic timeout'
+    : state.stage === 'setup' ? 'Starting soon'
     : state.stage === 'live' ? `${state.settings.tiers.find((t) => t.key === state.currentTierKey)?.name ?? 'Live'} round`
     : state.stage === 'accelerated' ? 'Accelerated round'
     : 'Auction complete';
@@ -127,7 +128,11 @@ export default function ScreenPage() {
           <span className="scr-brand-bar" />
           {state.settings.auctionName}
         </Link>
-        <div className="scr-stagechip" key={`${state.stage}-${state.currentTierKey ?? ''}`} data-stage={state.stage}>
+        <div
+          className="scr-stagechip"
+          key={`${state.stage}-${state.currentTierKey ?? ''}${state.timeout ? '-to' : ''}`}
+          data-stage={state.timeout ? 'timeout' : state.stage}
+        >
           {stageLabel}
         </div>
         <div className={`scr-live${connected ? '' : ' off'}`}>
@@ -143,7 +148,9 @@ export default function ScreenPage() {
           ? <FinalBoard state={state} />
           : lot && lotPlayer
             ? <ScreenLot state={state} lot={lot} player={lotPlayer} tier={tier} leading={leading} />
-            : <ScreenIdle state={state} />}
+            : state.timeout
+              ? <TimeoutBoard state={state} />
+              : <ScreenIdle state={state} />}
       </main>
 
       <TeamsFooter state={state} leadingId={leading?.id ?? null} prevPurse={prevPurseRef.current} />
@@ -360,6 +367,73 @@ function ScreenIdle({ state }: { state: StateView }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------- strategic timeout board ---------------- */
+
+/**
+ * End-of-set break: the auction pauses and the room studies the state of play —
+ * every purse, every squad bought so far, and how many players are still to come.
+ * Stays up until the auctioneer resumes.
+ */
+function TimeoutBoard({ state }: { state: StateView }) {
+  const t = state.timeout!;
+  const poolLeft = state.phase.remainingInPhase;
+  return (
+    <div className="scr-timeout">
+      <div className="scr-to-badge"><i aria-hidden />STRATEGIC TIMEOUT</div>
+      <div className="scr-final-sub">
+        {t.setNumber !== null ? `Set ${t.setNumber} complete · ` : ''}
+        {poolLeft} player{poolLeft === 1 ? '' : 's'} still in the pool
+        {state.phase.unsold > 0 ? ` · ${state.phase.unsold} unsold` : ''}
+      </div>
+      <div className="scr-final-grid">
+        {state.teams.map((team, ci) => {
+          const squad = state.players
+            .filter((p) => p.teamId === team.id && p.status === 'sold')
+            .sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+          const frac = team.purse > 0 ? Math.max(0, Math.min(1, team.remaining / team.purse)) : 0;
+          return (
+            <div
+              key={team.id}
+              className="scr-final-col"
+              style={vars({ '--i': ci, '--team': team.color, '--team-rgb': rgbTriplet(team.color) })}
+            >
+              <div className={`scr-final-head${darkInk(team.color) ? ' dark-ink' : ''}`} style={vars({ '--i': ci })}>
+                <h3>{team.name}</h3>
+                <div className="cap">Capt. {team.captain}</div>
+              </div>
+              <div className="scr-to-purse">
+                <div className="row1">
+                  <span className="label">Purse left</span>
+                  <span className="amount">{fmt(team.remaining)}</span>
+                </div>
+                <div className="scr-fuel"><i style={{ transform: `scaleX(${frac})` }} /></div>
+                <div className="row2">
+                  <span>{team.count}/{state.settings.maxSquad} bought{team.full ? ' · FULL' : ''}</span>
+                  {!team.full && <span>max bid {fmt(team.maxBid)}</span>}
+                </div>
+              </div>
+              <div className="scr-final-rows">
+                {squad.length === 0 && <div className="scr-final-empty">No players yet</div>}
+                {squad.map((p, i) => (
+                  <div
+                    key={p.id}
+                    className={`scr-final-row${i === 0 ? ' top-buy' : ''}`}
+                    style={vars({ '--i': i, '--ci': ci })}
+                  >
+                    <span className="fname">{p.name}</span>
+                    {i === 0 && <span className="fchip">TOP BUY</span>}
+                    <span className="fprice">{fmt(p.price)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

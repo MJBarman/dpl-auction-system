@@ -138,6 +138,7 @@
 }
 .scr-stagechip[data-stage='accelerated'] { color: var(--gold); }
 .scr-stagechip[data-stage='completed'] { color: var(--mid); }
+.scr-stagechip[data-stage='timeout'] { color: var(--gold); border-color: var(--gold-deep); }
 @keyframes scrChipWipe {
   from { clip-path: inset(0 100% 0 0); opacity: 0; }
   to   { clip-path: inset(0 0 0 0); opacity: 1; }
@@ -803,6 +804,49 @@
   0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
   85% { opacity: 1; }
   100% { transform: translate3d(var(--dx), 118vh, 0) rotate(var(--rot)); opacity: 0; }
+}
+
+/* ---------- strategic timeout board (keyed-by: stage) ---------- */
+.scr-timeout { width: 100%; }
+.scr-to-badge {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  font-family: var(--font-display);
+  font-size: clamp(32px, 5.5vw, 76px);
+  letter-spacing: 0.06em; text-transform: uppercase; text-align: center;
+  color: var(--gold);
+  margin-bottom: 4px;
+  animation: scrGlint 1.8s ease-out 200ms both, scrToPulse 2.4s ease-in-out 1.4s infinite;
+  background: linear-gradient(100deg, var(--gold-deep) 20%, var(--gold-hi) 50%, var(--gold-deep) 80%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.scr-to-badge i { /* pause glyph — two bars, drawn so it inherits no glyph metrics */
+  flex: none; width: clamp(20px, 3vw, 42px); height: clamp(30px, 4.5vw, 62px);
+  border-left: clamp(7px, 1vw, 14px) solid var(--gold);
+  border-right: clamp(7px, 1vw, 14px) solid var(--gold);
+}
+@keyframes scrToPulse { 50% { opacity: 0.72; } }
+.scr-timeout .scr-final-sub { margin-bottom: 26px; }
+.scr-to-purse {
+  background: rgba(10, 17, 32, 0.9);
+  border: 1px solid var(--line); border-top: none;
+  padding: 12px;
+}
+.scr-to-purse .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.scr-to-purse .label {
+  font-size: clamp(11px, 1.1vw, 14px); font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--mid);
+}
+.scr-to-purse .amount {
+  font-family: var(--font-display); font-size: clamp(24px, 2.8vw, 40px);
+  color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+.scr-to-purse .scr-fuel { position: relative; height: 6px; margin: 8px 0; background: rgba(30, 42, 68, 0.8); }
+.scr-to-purse .row2 {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-size: clamp(12px, 1.2vw, 16px); font-weight: 600; color: var(--mid);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- final board ---------- */

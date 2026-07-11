@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
     { upTo: null, step: 500 },
   ],
   bidderBidding: true,
+  timeoutEvery: 8, // strategic timeout after every 8 main-round players (0 = off)
   tiers: [
     { key: 'diamond', name: 'Diamond', basePrice: 1000, color: '#67e8f9', order: 1 },
     { key: 'gold', name: 'Gold', basePrice: 600, color: '#fbbf24', order: 2 },
@@ -168,6 +169,25 @@ export function ensurePhotoCodes(state: State): boolean {
   return changed;
 }
 
+/** Default the strategic-timeout fields on databases (and restored backups)
+ *  from before the feature. Returns true when anything changed. */
+export function ensureTimeoutFields(state: State): boolean {
+  let changed = false;
+  if (typeof state.settings.timeoutEvery !== 'number') {
+    state.settings.timeoutEvery = DEFAULT_SETTINGS.timeoutEvery;
+    changed = true;
+  }
+  if (typeof state.mainAuctionCount !== 'number') {
+    state.mainAuctionCount = 0;
+    changed = true;
+  }
+  if (state.timeout === undefined) {
+    state.timeout = null;
+    changed = true;
+  }
+  return changed;
+}
+
 export function buildInitialState(): State {
   const teams: Team[] = TEAM_SEED.map((t) => ({ ...t, code: generateCode() }));
   const players: Player[] = PLAYER_SEED.map((p, i) => ({
@@ -189,12 +209,15 @@ export function buildInitialState(): State {
     photoCode: generateCode(10),
   }));
   return {
-    settings: DEFAULT_SETTINGS,
+    // Clone — states are mutated in place and must never write back into the seed.
+    settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Settings,
     teams,
     players,
     stage: 'setup',
     currentTierKey: null,
     lot: null,
+    mainAuctionCount: 0,
+    timeout: null,
     watchlists: {},
     version: 1,
   };

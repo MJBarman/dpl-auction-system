@@ -6,6 +6,18 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["server/dist/index.js"],
       "port": 4000
+    },
+    {
+      "name": "auction-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/barma/AppData/Local/Temp/claude/C--Users-barma-React-Native-Projects-dpl-auction-system/3927ebd7-3996-4714-b8f6-428b49cfb34b/scratchpad/preview-server.cjs"],
+      "port": 4000
+    },
+    {
+      "name": "timeout-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/barma/AppData/Local/Temp/claude/C--Users-barma-React-Native-Projects-dpl-auction-system/2a20e4b2-9fcd-41cf-a42b-93538711254b/scratchpad/preview-server.cjs"],
+      "port": 4100
     }
   ]
 }
