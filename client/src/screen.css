@@ -143,6 +143,20 @@
   from { clip-path: inset(0 100% 0 0); opacity: 0; }
   to   { clip-path: inset(0 0 0 0); opacity: 1; }
 }
+.scr-head-right { display: flex; align-items: center; gap: 18px; }
+.scr-sound {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 42px; height: 42px; flex: none;
+  font-size: 19px; line-height: 1; cursor: pointer;
+  color: var(--hi);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  transition: filter 0.12s, opacity 0.12s, border-color 0.12s;
+}
+.scr-sound:hover { filter: brightness(1.3); }
+.scr-sound:not(.muted) { border-color: rgba(74, 222, 128, 0.5); }
+.scr-sound.muted { opacity: 0.5; }
 .scr-live {
   display: flex; align-items: center; gap: 12px;
   font-weight: 800; font-size: 17px; letter-spacing: 0.3em;

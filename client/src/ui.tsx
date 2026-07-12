@@ -127,11 +127,14 @@ export function formatClock(totalSecs: number): string {
 
 // ---- bid sound --------------------------------------------------------------
 
-const BID_MUTE_KEY = 'dpl.bidSound.muted';
+// Default (auctioneer console) mute key. Each screen passes its own key so the
+// console and the projector keep independent, per-device mute preferences.
+export const CONSOLE_BID_MUTE_KEY = 'dpl.bidSound.muted';
+export const SCREEN_BID_MUTE_KEY = 'dpl.bidSound.muted.screen';
 
-function loadMuted(): boolean {
+function loadMuted(key: string): boolean {
   try {
-    return localStorage.getItem(BID_MUTE_KEY) === '1';
+    return localStorage.getItem(key) === '1';
   } catch {
     return false; // private mode / storage disabled — default to audible
   }
@@ -139,20 +142,29 @@ function loadMuted(): boolean {
 
 /**
  * Plays a chime once per genuinely new bid on the current lot, and exposes a
- * mute preference (persisted so it survives a reload mid-auction).
+ * mute preference (persisted under `storageKey` so it survives a reload
+ * mid-auction, and so different screens can mute independently).
  *
  * Fires only on a bid *count increase* for the same lot, so it stays silent on
  * the first render, on a fresh lot appearing, on an undo (count drops), and on
  * the many socket re-renders a bidding war produces. The AudioContext is
- * unlocked on the auctioneer's first interaction so that later bids arriving
- * over the socket — which carry no user gesture — are still allowed to sound.
+ * unlocked on the viewer's first interaction so that later bids arriving over
+ * the socket — which carry no user gesture — are still allowed to sound.
  */
-export function useBidSound(lot: LotView | null): { muted: boolean; toggleMuted: () => void } {
-  const [muted, setMuted] = useState<boolean>(loadMuted);
+export function useBidSound(
+  lot: LotView | null,
+  storageKey: string = CONSOLE_BID_MUTE_KEY,
+): { muted: boolean; toggleMuted: () => void } {
+  const [muted, setMuted] = useState<boolean>(() => loadMuted(storageKey));
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
   useEffect(() => {
+    // Try immediately — if the document already has (sticky) user activation,
+    // e.g. the operator clicked through to the big screen, this unlocks the
+    // context up front so the very first bid can sound. Otherwise the listeners
+    // below unlock on the first interaction on this screen.
+    unlockAudio();
     const unlock = () => unlockAudio();
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -176,13 +188,13 @@ export function useBidSound(lot: LotView | null): { muted: boolean; toggleMuted:
     setMuted((m) => {
       const next = !m;
       try {
-        localStorage.setItem(BID_MUTE_KEY, next ? '1' : '0');
+        localStorage.setItem(storageKey, next ? '1' : '0');
       } catch {
         /* ignore — preference just won't persist */
       }
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
   return { muted, toggleMuted };
 }

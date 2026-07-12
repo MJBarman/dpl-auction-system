@@ -2,7 +2,10 @@ import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store';
 import { LotView, PlayerView, StateView, Tier } from '../types';
-import { fmt, formatClock, OfflineBanner, PlayerPhoto, statVal, TIMEOUT_COUNTDOWN_MS, useCountdown } from '../ui';
+import {
+  fmt, formatClock, OfflineBanner, PlayerPhoto, SCREEN_BID_MUTE_KEY, statVal, TIMEOUT_COUNTDOWN_MS,
+  useBidSound, useCountdown,
+} from '../ui';
 import '../screen.css';
 
 /* Animation keying discipline (see screen.css header):
@@ -39,6 +42,9 @@ interface FlashInfo {
 
 export default function ScreenPage() {
   const { state, connected } = useApp();
+  // Chime on each new bid; the projector keeps its own mute preference,
+  // independent of the auctioneer's console.
+  const { muted, toggleMuted } = useBidSound(state?.lot ?? null, SCREEN_BID_MUTE_KEY);
   const [flash, setFlash] = useState<FlashInfo | null>(null);
   const prevRef = useRef<StateView | null>(null);
   const flashIdRef = useRef(0);
@@ -135,9 +141,21 @@ export default function ScreenPage() {
         >
           {stageLabel}
         </div>
-        <div className={`scr-live${connected ? '' : ' off'}`}>
-          <span className="scr-live-dot"><i /><i /></span>
-          {connected ? 'LIVE' : 'OFFLINE'}
+        <div className="scr-head-right">
+          <button
+            type="button"
+            className={`scr-sound${muted ? ' muted' : ''}`}
+            onClick={toggleMuted}
+            aria-pressed={!muted}
+            aria-label={muted ? 'Bid sound is off — click to turn it on' : 'Bid sound is on — click to mute'}
+            title={muted ? 'Bid sound off' : 'Bid sound on'}
+          >
+            {muted ? '🔇' : '🔔'}
+          </button>
+          <div className={`scr-live${connected ? '' : ' off'}`}>
+            <span className="scr-live-dot"><i /><i /></span>
+            {connected ? 'LIVE' : 'OFFLINE'}
+          </div>
         </div>
       </header>
 
