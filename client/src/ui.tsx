@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { PlayerStats, PlayerView, StateView, Tier } from './types';
+import { LotView, PlayerStats, PlayerView, StateView, Tier } from './types';
+import { playBidSound, unlockAudio } from './sound';
 
 export const fmt = (n: number | null | undefined): string =>
   n === null || n === undefined ? '–' : n.toLocaleString('en-IN');
@@ -122,6 +123,83 @@ export function formatClock(totalSecs: number): string {
   const m = Math.floor(t / 60);
   const s = t % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ---- bid sound --------------------------------------------------------------
+
+const BID_MUTE_KEY = 'dpl.bidSound.muted';
+
+function loadMuted(): boolean {
+  try {
+    return localStorage.getItem(BID_MUTE_KEY) === '1';
+  } catch {
+    return false; // private mode / storage disabled — default to audible
+  }
+}
+
+/**
+ * Plays a chime once per genuinely new bid on the current lot, and exposes a
+ * mute preference (persisted so it survives a reload mid-auction).
+ *
+ * Fires only on a bid *count increase* for the same lot, so it stays silent on
+ * the first render, on a fresh lot appearing, on an undo (count drops), and on
+ * the many socket re-renders a bidding war produces. The AudioContext is
+ * unlocked on the auctioneer's first interaction so that later bids arriving
+ * over the socket — which carry no user gesture — are still allowed to sound.
+ */
+export function useBidSound(lot: LotView | null): { muted: boolean; toggleMuted: () => void } {
+  const [muted, setMuted] = useState<boolean>(loadMuted);
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
+  const lotId = lot?.id ?? null;
+  const count = lot?.bids.length ?? 0;
+  const seen = useRef<{ lotId: string | null; count: number }>({ lotId: null, count: 0 });
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = { lotId, count };
+    if (lotId === null || prev.lotId !== lotId) return; // first load or a new lot
+    if (count > prev.count && !mutedRef.current) playBidSound();
+  }, [lotId, count]);
+
+  const toggleMuted = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      try {
+        localStorage.setItem(BID_MUTE_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore — preference just won't persist */
+      }
+      return next;
+    });
+  }, []);
+
+  return { muted, toggleMuted };
+}
+
+/** Toggle for the bid chime. Reads as a live on/off state, not a fire button. */
+export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`btn ghost sound-toggle${muted ? ' muted' : ''}`}
+      onClick={onToggle}
+      aria-pressed={!muted}
+      title={muted ? 'Bid sound is off — click to turn it on' : 'Bid sound is on — click to mute'}
+    >
+      {muted ? '🔇 Bid sound off' : '🔔 Bid sound on'}
+    </button>
+  );
 }
 
 export function ConnectionDot({ connected }: { connected: boolean }) {

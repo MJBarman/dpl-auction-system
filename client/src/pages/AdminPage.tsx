@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
-import { ConnectionDot, OfflineBanner } from '../ui';
+import { BidSoundToggle, ConnectionDot, OfflineBanner, useBidSound } from '../ui';
 import AuctionConsole from '../admin/AuctionConsole';
 import LogTab from '../admin/LogTab';
 import PlayersTab from '../admin/PlayersTab';
@@ -34,6 +34,10 @@ export default function AdminPage() {
     if (state && state.you.role !== 'admin') refresh();
   }, [state?.you.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Chime on every new bid; the toggle lets the auctioneer mute it mid-event.
+  // Called before the early returns below so hook order stays stable.
+  const { muted, toggleMuted } = useBidSound(state?.lot ?? null);
+
   if (!session || session.role !== 'admin') return null;
   if (!state) return <div className="page-loading">Connecting…</div>;
 
@@ -58,6 +62,7 @@ export default function AdminPage() {
           ))}
         </nav>
         <div className="topbar-right">
+          <BidSoundToggle muted={muted} onToggle={toggleMuted} />
           <ConnectionDot connected={connected} />
           <button className="btn ghost" onClick={signOut}>Sign out</button>
         </div>
