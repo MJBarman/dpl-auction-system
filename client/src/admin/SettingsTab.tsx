@@ -16,6 +16,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
     reservePerSlot: String(s.reservePerSlot),
     bidderBidding: s.bidderBidding,
     timeoutEvery: String(s.timeoutEvery),
+    showTier: s.showTier,
   });
   const [increments, setIncrements] = useState<{ upTo: string; step: string }[]>(
     s.increments.map((r) => ({ upTo: r.upTo === null ? '' : String(r.upTo), step: String(r.step) })),
@@ -36,6 +37,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
         reservePerSlot: Number(form.reservePerSlot),
         bidderBidding: form.bidderBidding,
         timeoutEvery: Number(form.timeoutEvery),
+        showTier: form.showTier,
         increments: increments.map((r): IncrementRung => ({
           upTo: r.upTo.trim() === '' ? null : Number(r.upTo),
           step: Number(r.step),
@@ -109,6 +111,13 @@ export default function SettingsTab({ state }: { state: StateView }) {
 
       <div className="card">
         <h3>Tiers & base prices</h3>
+        <label className="check">
+          <input type="checkbox" checked={form.showTier} onChange={(e) => setForm({ ...form, showTier: e.target.checked })} />
+          Show tiers on the auction screen &amp; dashboards
+        </label>
+        <p className="muted small">
+          Off hides every tier label — the projector player card &amp; round name, the idle tier board, the console stage chips, and the team squad/pool tiers. Base prices and the round order below are unaffected.
+        </p>
         {tiers.map((t, i) => (
           <div className="row" key={t.key || i}>
             <input className="input grow" value={t.name}

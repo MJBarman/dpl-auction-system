@@ -29,6 +29,7 @@ export interface Settings {
   increments: IncrementRung[];
   bidderBidding: boolean; // captains may bid from their own devices
   timeoutEvery: number;   // strategic timeout after every N main-round players (0 = off)
+  showTier: boolean;      // show tier names/chips on screens (off hides them everywhere)
   tiers: Tier[];
 }
 

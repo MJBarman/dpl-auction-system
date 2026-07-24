@@ -74,6 +74,7 @@ function cleanSettings(body: unknown, current: Settings, state: State): Settings
   if (b.reservePerSlot !== undefined) next.reservePerSlot = int(b.reservePerSlot, 'Reserve per slot', { min: 0, max: 1_000_000 });
   if (b.bidderBidding !== undefined) next.bidderBidding = Boolean(b.bidderBidding);
   if (b.timeoutEvery !== undefined) next.timeoutEvery = int(b.timeoutEvery, 'Timeout frequency', { min: 0, max: 500 });
+  if (b.showTier !== undefined) next.showTier = Boolean(b.showTier);
 
   if (next.minSquad > next.maxSquad) throw new AuctionError('Minimum squad cannot exceed maximum squad');
 

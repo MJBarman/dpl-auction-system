@@ -95,10 +95,12 @@ export default function ScreenPage() {
 
   if (!state) return <div className="page-loading">Connecting…</div>;
 
+  const showTier = state.settings.showTier !== false;
   const lot = state.lot;
   const lotPlayer = lot ? state.players.find((p) => p.id === lot.playerId) ?? null : null;
   const tierKey = lotPlayer?.tierKey ?? state.currentTierKey ?? state.settings.tiers[0]?.key;
   const tier = state.settings.tiers.find((t) => t.key === tierKey);
+  // Keep the accent color for ambient theming even when tier names are hidden.
   const tierColor = tier?.color ?? '#4f7cff';
   const leading = lot?.leadingTeamId ? state.teams.find((t) => t.id === lot.leadingTeamId) ?? null : null;
   const leadColor = leading?.color ?? tierColor;
@@ -106,7 +108,8 @@ export default function ScreenPage() {
   const stageLabel =
     state.timeout ? 'Strategic timeout'
     : state.stage === 'setup' ? 'Starting soon'
-    : state.stage === 'live' ? `${state.settings.tiers.find((t) => t.key === state.currentTierKey)?.name ?? 'Live'} round`
+    : state.stage === 'live'
+      ? (showTier ? `${state.settings.tiers.find((t) => t.key === state.currentTierKey)?.name ?? 'Live'} round` : 'Live round')
     : state.stage === 'accelerated' ? 'Accelerated round'
     : 'Auction complete';
 
@@ -165,10 +168,10 @@ export default function ScreenPage() {
         {state.stage === 'completed'
           ? <FinalBoard state={state} />
           : lot && lotPlayer
-            ? <ScreenLot state={state} lot={lot} player={lotPlayer} tier={tier} leading={leading} />
+            ? <ScreenLot state={state} lot={lot} player={lotPlayer} tier={showTier ? tier : undefined} leading={leading} />
             : state.timeout
               ? <TimeoutBoard state={state} />
-              : <ScreenIdle state={state} />}
+              : <ScreenIdle state={state} showTier={showTier} />}
       </main>
 
       <TeamsFooter state={state} leadingId={leading?.id ?? null} prevPurse={prevPurseRef.current} />
@@ -335,7 +338,7 @@ function CountdownRing({ secs, frac }: { secs: number; frac: number }) {
 
 /* ---------------- idle ---------------- */
 
-function ScreenIdle({ state }: { state: StateView }) {
+function ScreenIdle({ state, showTier }: { state: StateView; showTier: boolean }) {
   const recent = state.players.filter((p) => p.status === 'sold').slice().reverse().slice(0, 12);
   const watermark = state.settings.auctionName.split(/\s+/).slice(0, 3).join(' ');
   const marquee = recent.length >= 4;
@@ -346,20 +349,22 @@ function ScreenIdle({ state }: { state: StateView }) {
       <div className="scr-idle-headline">
         {state.stage === 'setup' ? 'The auction begins shortly' : 'Next player coming up'}
       </div>
-      <div className="scr-tierboard">
-        {state.progress.perTier.map((t) => {
-          const tc = state.settings.tiers.find((x) => x.key === t.tierKey)?.color ?? '#4f7cff';
-          return (
-            <div key={t.tierKey} className="scr-tierrow">
-              <span className="tname" style={{ color: tc }}>{t.name}</span>
-              <span className="tcount"><b>{t.sold}</b>/{t.total} sold</span>
-              <span className="scr-tierbar">
-                <i style={vars({ '--tc': tc, transform: `scaleX(${t.total ? t.sold / t.total : 0})` })} />
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      {showTier && (
+        <div className="scr-tierboard">
+          {state.progress.perTier.map((t) => {
+            const tc = state.settings.tiers.find((x) => x.key === t.tierKey)?.color ?? '#4f7cff';
+            return (
+              <div key={t.tierKey} className="scr-tierrow">
+                <span className="tname" style={{ color: tc }}>{t.name}</span>
+                <span className="tcount"><b>{t.sold}</b>/{t.total} sold</span>
+                <span className="scr-tierbar">
+                  <i style={vars({ '--tc': tc, transform: `scaleX(${t.total ? t.sold / t.total : 0})` })} />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {state.phase.unsold > 0 && (
         <div className="scr-unsold-note">
           {state.phase.unsold} unsold player{state.phase.unsold === 1 ? '' : 's'} will return in the accelerated round

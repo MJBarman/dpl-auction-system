@@ -14,7 +14,7 @@ export function tierFor(state: StateView, key: string): Tier | undefined {
 
 export function TierBadge({ state, tierKey }: { state: StateView; tierKey: string }) {
   const tier = tierFor(state, tierKey);
-  if (!tier) return null;
+  if (!tier || state.settings.showTier === false) return null;
   return (
     <span className="tier-badge" style={{ color: tier.color, borderColor: tier.color }}>
       {tier.name}

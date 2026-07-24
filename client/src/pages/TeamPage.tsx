@@ -374,6 +374,7 @@ function RecentSales({ state, teamId }: { state: StateView; teamId: string }) {
 
 function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
   const team = state.teams.find((t) => t.id === teamId)!;
+  const showTier = state.settings.showTier !== false;
   const roster = state.players
     .filter((p) => p.status === 'sold' && p.teamId === teamId)
     .sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
@@ -385,13 +386,13 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
         <p className="muted">No players yet — your spends will appear here the moment the hammer falls.</p>
       ) : (
         <table className="table">
-          <thead><tr><th>Player</th><th>Role</th><th>Tier</th><th>Price</th><th>How</th></tr></thead>
+          <thead><tr><th>Player</th><th>Role</th>{showTier && <th>Tier</th>}<th>Price</th><th>How</th></tr></thead>
           <tbody>
             {roster.map((p) => (
               <tr key={p.id}>
                 <td>{p.name}</td>
                 <td className="muted">{p.role}</td>
-                <td><TierBadge state={state} tierKey={p.tierKey} /></td>
+                {showTier && <td><TierBadge state={state} tierKey={p.tierKey} /></td>}
                 <td className="num">{fmt(p.price)}</td>
                 <td className="muted small">{p.round === 'main' ? 'auction' : p.round}</td>
               </tr>
@@ -407,6 +408,7 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
   const run = useAction();
   const [filter, setFilter] = useState<'all' | 'available' | 'starred'>('available');
   const [editing, setEditing] = useState<PlayerView | null>(null);
+  const showTier = state.settings.showTier !== false;
 
   const players = useMemo(() => {
     let list = [...state.players];
@@ -439,7 +441,7 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
       </div>
       <p className="muted small">⭐ stars, target prices and notes are private to your team — nobody else can see them.</p>
       <table className="table pool-table">
-        <thead><tr><th></th><th>Player</th><th>Tier</th><th>Role</th><th>Base</th><th>My target</th><th>Status</th></tr></thead>
+        <thead><tr><th></th><th>Player</th>{showTier && <th>Tier</th>}<th>Role</th><th>Base</th><th>My target</th><th>Status</th></tr></thead>
         <tbody>
           {players.map((p) => {
             const wl = watchlist[p.id];
@@ -454,7 +456,7 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                   </div>
                   {wl?.note ? <div className="muted small">📝 {wl.note}</div> : null}
                 </td>
-                <td><TierBadge state={state} tierKey={p.tierKey} /></td>
+                {showTier && <td><TierBadge state={state} tierKey={p.tierKey} /></td>}
                 <td className="muted small">{p.role}</td>
                 <td className="num">{fmt(p.basePrice)}</td>
                 <td className="num">{wl?.targetPrice != null ? fmt(wl.targetPrice) : '—'}</td>

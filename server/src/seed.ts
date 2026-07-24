@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   bidderBidding: true,
   timeoutEvery: 8, // strategic timeout after every 8 main-round players (0 = off)
+  showTier: true,
   tiers: [
     { key: 'diamond', name: 'Diamond', basePrice: 1000, color: '#67e8f9', order: 1 },
     { key: 'gold', name: 'Gold', basePrice: 600, color: '#fbbf24', order: 2 },
@@ -175,6 +176,10 @@ export function ensureTimeoutFields(state: State): boolean {
   let changed = false;
   if (typeof state.settings.timeoutEvery !== 'number') {
     state.settings.timeoutEvery = DEFAULT_SETTINGS.timeoutEvery;
+    changed = true;
+  }
+  if (typeof state.settings.showTier !== 'boolean') {
+    state.settings.showTier = DEFAULT_SETTINGS.showTier;
     changed = true;
   }
   if (typeof state.mainAuctionCount !== 'number') {

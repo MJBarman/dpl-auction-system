@@ -55,9 +55,10 @@ function setInfo(state: StateView) {
 
 function StageBar({ state }: { state: StateView }) {
   const sets = state.stage === 'live' ? setInfo(state) : null;
+  const showTier = state.settings.showTier !== false;
   return (
     <div className="stagebar">
-      {state.progress.perTier.map((t) => {
+      {showTier && state.progress.perTier.map((t) => {
         const tier = state.settings.tiers.find((x) => x.key === t.tierKey);
         const active = state.currentTierKey === t.tierKey && (state.stage === 'live');
         return (
@@ -165,6 +166,7 @@ function BetweenLots({ state }: { state: StateView }) {
   }, [state]);
   const phaseDone = state.phase.remainingInPhase === 0;
   const sets = state.stage === 'live' ? setInfo(state) : null;
+  const showTier = state.settings.showTier !== false;
 
   return (
     <div className="card">
@@ -183,7 +185,7 @@ function BetweenLots({ state }: { state: StateView }) {
               <option value="">…or pick a specific player</option>
               {eligible.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({state.settings.tiers.find((t) => t.key === p.tierKey)?.name ?? p.tierKey})
+                  {showTier ? `${p.name} (${state.settings.tiers.find((t) => t.key === p.tierKey)?.name ?? p.tierKey})` : p.name}
                 </option>
               ))}
             </select>
