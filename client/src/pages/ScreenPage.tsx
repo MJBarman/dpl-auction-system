@@ -6,6 +6,7 @@ import {
   fmt, formatClock, OfflineBanner, PlayerPhoto, SCREEN_BID_MUTE_KEY, statVal, TIMEOUT_COUNTDOWN_MS,
   useBidSound, useCountdown,
 } from '../ui';
+import { useTheme } from '../theme';
 import '../screen.css';
 
 /* Animation keying discipline (see screen.css header):
@@ -45,6 +46,7 @@ export default function ScreenPage() {
   // Chime on each new bid; the projector keeps its own mute preference,
   // independent of the auctioneer's console.
   const { muted, toggleMuted } = useBidSound(state?.lot ?? null, SCREEN_BID_MUTE_KEY);
+  const { theme, toggle: toggleTheme } = useTheme();
   const [flash, setFlash] = useState<FlashInfo | null>(null);
   const prevRef = useRef<StateView | null>(null);
   const flashIdRef = useRef(0);
@@ -145,6 +147,16 @@ export default function ScreenPage() {
           {stageLabel}
         </div>
         <div className="scr-head-right">
+          <button
+            type="button"
+            className="scr-theme"
+            onClick={toggleTheme}
+            aria-pressed={theme === 'light'}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <button
             type="button"
             className={`scr-sound${muted ? ' muted' : ''}`}

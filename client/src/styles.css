@@ -1,24 +1,62 @@
 /* ---------- base ---------- */
+/* The dark palette below is the default. Light mode is an opt-in per-device
+   preference: theme.ts stamps <html data-theme="light"> and the override block
+   further down re-points these same variables at white tones. Every surface
+   reads from the variables, so both themes stay in sync from one source. */
 :root {
   --bg: #0b1020;
   --bg2: #0f162c;
   --surface: #151d36;
   --surface2: #1c2547;
   --border: #2a3560;
+  --border-soft: rgba(42, 53, 96, .45); /* table & feed hairlines */
   --text: #e8ecf8;
   --muted: #93a0c4;
   --accent: #4f7cff;
+  --accent-tint: rgba(79, 124, 255, .08); /* "this is you" row wash */
   --ok: #22c55e;
   --warn: #f59e0b;
   --danger: #ef4444;
+  --backdrop-hi: #16224a; /* radial highlight baked into the page background */
+  --topbar-bg: rgba(11, 16, 32, .8); /* frosted sticky bar */
+  /* Status text tuned for legibility on the current surface (not saturated
+     fills — those stay hardcoded). Overridden darker for the light theme. */
+  --ok-text: #4ade80;
+  --info-text: #7dd3fc;
+  --danger-text: #fca5a5;
+  --warn-soft: #fcd34d;
   --radius: 12px;
   color-scheme: dark;
+}
+
+/* ---------- light mode ---------- */
+:root[data-theme='light'] {
+  --bg: #eef1f7;
+  --bg2: #f1f4fa;
+  --surface: #ffffff;
+  --surface2: #e7ecf6;
+  --border: #d5dced;
+  --border-soft: rgba(100, 116, 139, .22);
+  --text: #1b2440;
+  --muted: #5c6a86;
+  --accent: #2563eb;
+  --accent-tint: rgba(37, 99, 235, .10);
+  --ok: #16a34a;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --backdrop-hi: #dbe4fb;
+  --topbar-bg: rgba(255, 255, 255, .82);
+  --ok-text: #15803d;
+  --info-text: #0369a1;
+  --danger-text: #dc2626;
+  --warn-soft: #b45309;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; min-height: 100%; }
 body {
-  background: radial-gradient(1200px 700px at 80% -10%, #16224a 0%, var(--bg) 55%) fixed;
+  background: radial-gradient(1200px 700px at 80% -10%, var(--backdrop-hi) 0%, var(--bg) 55%) fixed;
   color: var(--text);
   font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
   font-size: 15px;
@@ -92,10 +130,10 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
   color: var(--muted); padding: 7px 8px; border-bottom: 1px solid var(--border);
 }
 .table th:last-child, .table td.num { text-align: right; }
-.table td { padding: 7px 8px; border-bottom: 1px solid rgba(42, 53, 96, .45); vertical-align: top; }
+.table td { padding: 7px 8px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
 .table tr:last-child td { border-bottom: none; }
 .row-dim { opacity: .55; }
-.row-you td { background: rgba(79, 124, 255, .08); }
+.row-you td { background: var(--accent-tint); }
 .actions { text-align: right; white-space: nowrap; }
 .actions .btn { padding: 4px 9px; font-size: 12.5px; }
 
@@ -109,15 +147,15 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .badge.sleeper { background: #14532d; color: #bbf7d0; }
 .small-badge { font-size: 9.5px; }
 .status { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-.status-available { color: #7dd3fc; }
+.status-available { color: var(--info-text); }
 .status-sold { color: var(--ok); }
 .status-unsold { color: var(--warn); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .big-dot { width: 16px; height: 16px; }
 
 .conn-dot { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; }
-.conn-dot.on { color: #4ade80; background: rgba(34, 197, 94, .12); }
-.conn-dot.off { color: #fca5a5; background: rgba(239, 68, 68, .15); animation: pulse 1.2s infinite; }
+.conn-dot.on { color: var(--ok-text); background: rgba(34, 197, 94, .12); }
+.conn-dot.off { color: var(--danger-text); background: rgba(239, 68, 68, .15); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .5; } }
 
 .offline-banner {
@@ -141,14 +179,15 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 16px; border-bottom: 1px solid var(--border);
-  background: rgba(11, 16, 32, .8); backdrop-filter: blur(8px);
+  background: var(--topbar-bg); backdrop-filter: blur(8px);
   position: sticky; top: 0; z-index: 40; flex-wrap: wrap;
 }
 .topbar-left { display: flex; align-items: center; gap: 10px; }
 .topbar-right { display: flex; align-items: center; gap: 10px; }
 .sound-toggle { padding: 7px 11px; font-size: 12.5px; font-weight: 700; border-radius: 999px; }
-.sound-toggle:not(.muted) { color: #4ade80; border-color: rgba(74, 222, 128, .4); background: rgba(34, 197, 94, .1); }
+.sound-toggle:not(.muted) { color: var(--ok-text); border-color: rgba(74, 222, 128, .4); background: rgba(34, 197, 94, .1); }
 .sound-toggle.muted { color: var(--muted); }
+.theme-toggle { padding: 7px 11px; font-size: 12.5px; font-weight: 700; border-radius: 999px; }
 .brand { font-weight: 800; text-decoration: none; font-size: 15px; }
 .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .tab {
@@ -157,13 +196,13 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 }
 .tab.active { background: var(--surface2); color: var(--text); }
 .stage-chip { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; padding: 3px 9px; border-radius: 999px; background: var(--surface2); }
-.stage-chip.stage-live, .stage-banner.stage-live { color: #4ade80; }
+.stage-chip.stage-live, .stage-banner.stage-live { color: var(--ok-text); }
 .stage-chip.stage-accelerated, .stage-banner.stage-accelerated { color: var(--warn); }
 .stage-chip.stage-completed, .stage-banner.stage-completed { color: var(--muted); }
 .stage-banner { font-weight: 700; }
 
 .warnings { padding: 8px 16px 0; }
-.warning { background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .4); color: #fcd34d; border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; font-size: 13.5px; }
+.warning { background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .4); color: var(--warn-soft); border-radius: 10px; padding: 8px 12px; margin-bottom: 6px; font-size: 13.5px; }
 
 /* ---------- landing ---------- */
 .landing { max-width: 1000px; margin: 0 auto; padding: 24px 16px 60px; }
@@ -214,7 +253,7 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 
 .bid-history { margin-top: 12px; }
-.bid-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid rgba(42, 53, 96, .4); font-size: 14px; }
+.bid-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid var(--border-soft); font-size: 14px; }
 .bid-row:last-child { border-bottom: none; }
 .bid-row.leading { background: rgba(34, 197, 94, .08); border-radius: 6px; }
 .bid-amt { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -250,7 +289,7 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .card.danger { border-color: rgba(239, 68, 68, .5); }
 .rung-label { min-width: 84px; }
 .log-type { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 6px; background: var(--surface2); }
-.log-sale { color: #4ade80; } .log-bid { color: #7dd3fc; } .log-undo { color: var(--warn); }
+.log-sale { color: var(--ok-text); } .log-bid { color: var(--info-text); } .log-undo { color: var(--warn); }
 
 /* ---------- team (bidder) page ---------- */
 .money-bar {
@@ -284,7 +323,7 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .hold-bid .hold-label { position: relative; z-index: 1; }
 .hold-hint { margin-top: 6px; }
 
-.wl-hint { color: #fcd34d; font-size: 13px; margin-top: 4px; font-weight: 600; }
+.wl-hint { color: var(--warn-soft); font-size: 13px; margin-top: 4px; font-weight: 600; }
 .pool-table td { font-size: 13.5px; }
 
 /* ---------- projector screen: see screen.css (loaded by ScreenPage) ---------- */
@@ -313,8 +352,8 @@ label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--t
 .photo-preview { text-align: center; margin: 14px 0; }
 .photo-preview img { max-width: min(300px, 100%); border-radius: 14px; border: 1px solid var(--border); }
 .notice { border-radius: 10px; padding: 10px 12px; font-weight: 600; margin: 10px 0; }
-.notice.ok { background: rgba(34, 197, 94, .12); color: #86efac; border: 1px solid rgba(34, 197, 94, .4); }
-.notice.error { background: rgba(239, 68, 68, .12); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .4); }
+.notice.ok { background: rgba(34, 197, 94, .12); color: var(--ok-text); border: 1px solid rgba(34, 197, 94, .4); }
+.notice.error { background: rgba(239, 68, 68, .12); color: var(--danger-text); border: 1px solid rgba(239, 68, 68, .4); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 900px) {

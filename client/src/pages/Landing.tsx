@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { loadSession, saveSession } from '../session';
 import { useApp } from '../store';
-import { ConnectionDot, useToast } from '../ui';
+import { ConnectionDot, ThemeToggle, useToast } from '../ui';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -44,6 +44,7 @@ export default function Landing() {
         <div className="landing-title-row">
           <h1>{state?.settings.auctionName ?? 'DPL Season 4 Player Auction'}</h1>
           <ConnectionDot connected={connected} />
+          <ThemeToggle />
         </div>
         <p className="muted">
           {state

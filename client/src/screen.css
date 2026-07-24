@@ -22,6 +22,19 @@
   --gold-deep: #b8860b;
   --danger: #ff2e4d;
   --steel: #64748b;
+  /* Recurring surface tones, pulled into variables so the light theme (further
+     down) can re-skin the whole broadcast from one place. */
+  --panel: rgba(10, 17, 32, 0.85);       /* glass cards: stats, feed rows */
+  --panel-strong: rgba(10, 17, 32, 0.9); /* signings, purse & roster cards */
+  --fuel-track: rgba(30, 42, 68, 0.8);   /* purse / progress-bar troughs */
+  --tex: 255, 255, 255;                  /* ambient texture ink (beams, grid, sheen, watermark) */
+  --vignette: rgba(0, 0, 0, 0.55);       /* edge darkening around the arena */
+  --ambient-top: #0d1730;                /* soft dome glow at the top of the arena */
+  --head-1: #0d1526;                     /* header bar gradient */
+  --head-2: #0a1120;
+  --gold-glow: rgba(251, 191, 36, 0.28); /* halo behind the live bid amount */
+  --live: #4ade80;      /* LIVE indicator + purse refund delta */
+  --live-off: #fca5a5;  /* OFFLINE label */
   --font-display: 'Anton', 'Arial Narrow', Impact, sans-serif;
   --font-body: 'Archivo', 'Segoe UI', system-ui, sans-serif;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
@@ -39,12 +52,46 @@
 }
 .scr-page b { font-weight: 700; }
 
+/* ---------- light mode: "stadium daylight" broadcast ----------
+   A clean warm-white arena with ink-navy type. The signature gold is shifted
+   to a deep bronze-amber so the money numbers still read as premium on white.
+   Team colors, the tier accent, and the SOLD/UNSOLD takeover are theme-neutral
+   (the takeover stays a dark cinematic sting on purpose) and are left alone. */
+:root[data-theme='light'] .scr-page {
+  --bg-0: #e9edf5;
+  --bg-1: #eef2f9;
+  --bg-2: #ffffff;
+  --line: #d3dbea;
+  --hi: #141b2e;
+  --mid: #5b6a86;
+  --gold: #b45309;
+  --gold-hi: #d97706;
+  --gold-deep: #78350f;
+  --danger: #e11d48;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-strong: rgba(255, 255, 255, 0.96);
+  --fuel-track: rgba(20, 30, 55, 0.12);
+  --tex: 24, 34, 66;
+  --vignette: rgba(70, 90, 130, 0.12);
+  --ambient-top: #ffffff;
+  --head-1: #ffffff;
+  --head-2: #eef2f9;
+  --gold-glow: rgba(180, 83, 9, 0.20);
+  --live: #15803d;
+  --live-off: #dc2626;
+}
+/* Self-contained saturated chip that would wash out on white — the only badge
+   whose ink/fill both need re-tuning for the light arena. */
+:root[data-theme='light'] .scr-badge.sleeper {
+  background: rgba(124, 58, 237, 0.12); color: #6d28d9; border-color: #7c3aed;
+}
+
 /* ---------- ambient arena (stable — never remounts) ---------- */
 .scr-ambient { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .scr-ambient::before {
   content: '';
   position: absolute; inset: 0;
-  background: radial-gradient(120% 90% at 50% 0%, #0d1730 0%, var(--bg-0) 62%);
+  background: radial-gradient(120% 90% at 50% 0%, var(--ambient-top) 0%, var(--bg-0) 62%);
 }
 .scr-beam {
   position: absolute;
@@ -61,7 +108,7 @@
 }
 .scr-beam.b {
   background: conic-gradient(from 60deg,
-    transparent 0deg 150deg, rgba(255, 255, 255, 0.035) 168deg, transparent 186deg 360deg);
+    transparent 0deg 150deg, rgba(var(--tex), 0.045) 168deg, transparent 186deg 360deg);
   animation: scrBeamSpin 140s linear infinite reverse;
 }
 @keyframes scrBeamSpin {
@@ -71,7 +118,7 @@
 .scr-gridlines {
   position: absolute; inset: -50% -50% 0 0;
   background: repeating-linear-gradient(115deg,
-    rgba(255, 255, 255, 0.024) 0 1px, transparent 1px 90px);
+    rgba(var(--tex), 0.028) 0 1px, transparent 1px 90px);
   animation: scrGridPan 60s linear infinite;
 }
 @keyframes scrGridPan {
@@ -89,7 +136,7 @@
 }
 .scr-vignette {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+  background: radial-gradient(ellipse at center, transparent 55%, var(--vignette) 100%);
 }
 
 .scr-page > header, .scr-page > main, .scr-page > footer, .scr-page > .offline-banner {
@@ -100,14 +147,14 @@
 .scr-head {
   display: flex; align-items: center; justify-content: space-between; gap: 18px;
   height: 68px; padding: 0 26px;
-  background: linear-gradient(180deg, #0d1526, #0a1120);
+  background: linear-gradient(180deg, var(--head-1), var(--head-2));
   border-bottom: 1px solid var(--line);
   position: relative; overflow: hidden;
 }
 .scr-head::after { /* broadcast sheen every 20s */
   content: '';
   position: absolute; top: 0; bottom: 0; left: 0; width: 220px;
-  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  background: linear-gradient(105deg, transparent, rgba(var(--tex), 0.05), transparent);
   animation: scrSheen 20s linear infinite;
   pointer-events: none;
 }
@@ -143,8 +190,8 @@
   from { clip-path: inset(0 100% 0 0); opacity: 0; }
   to   { clip-path: inset(0 0 0 0); opacity: 1; }
 }
-.scr-head-right { display: flex; align-items: center; gap: 18px; }
-.scr-sound {
+.scr-head-right { display: flex; align-items: center; gap: 14px; }
+.scr-sound, .scr-theme {
   display: inline-flex; align-items: center; justify-content: center;
   width: 42px; height: 42px; flex: none;
   font-size: 19px; line-height: 1; cursor: pointer;
@@ -154,25 +201,25 @@
   border-radius: 11px;
   transition: filter 0.12s, opacity 0.12s, border-color 0.12s;
 }
-.scr-sound:hover { filter: brightness(1.3); }
+.scr-sound:hover, .scr-theme:hover { filter: brightness(1.3); }
 .scr-sound:not(.muted) { border-color: rgba(74, 222, 128, 0.5); }
 .scr-sound.muted { opacity: 0.5; }
 .scr-live {
   display: flex; align-items: center; gap: 12px;
   font-weight: 800; font-size: 17px; letter-spacing: 0.3em;
-  color: #4ade80;
+  color: var(--live);
 }
-.scr-live.off { color: #fca5a5; }
+.scr-live.off { color: var(--live-off); }
 .scr-live-dot { position: relative; width: 12px; height: 12px; flex: none; }
 .scr-live-dot::before {
   content: '';
   position: absolute; inset: 0; border-radius: 50%;
-  background: #4ade80;
+  background: var(--live);
 }
 .scr-live.off .scr-live-dot::before { background: var(--danger); }
 .scr-live-dot i { /* radar pings */
   position: absolute; inset: -2px; border-radius: 50%;
-  border: 2px solid #4ade80;
+  border: 2px solid var(--live);
   animation: scrPing 1.8s var(--ease-out) infinite;
 }
 .scr-live.off .scr-live-dot i { border-color: var(--danger); }
@@ -256,7 +303,7 @@
   gap: 8px; max-width: 640px;
 }
 .scr-stat { /* keyed-by: player (grid remounts) — slam cascade via --i */
-  background: rgba(17, 28, 51, 0.85);
+  background: var(--panel);
   border-top: 1px solid rgba(var(--tier-rgb), 0.55);
   padding: 10px 6px 8px; text-align: center;
   animation: scrChipRise 380ms var(--ease-out) both;
@@ -314,12 +361,12 @@
   background: linear-gradient(180deg, var(--gold-hi) 18%, var(--gold) 68%, var(--gold-deep));
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
-  filter: drop-shadow(0 0 22px rgba(251, 191, 36, 0.28));
+  filter: drop-shadow(0 0 22px var(--gold-glow));
   animation: scrSlam 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes scrSlam {
-  0%   { transform: translateY(0.28em) scale(1.16); opacity: 0; filter: blur(8px) drop-shadow(0 0 22px rgba(251, 191, 36, 0.28)); }
-  60%  { transform: none; opacity: 1; filter: blur(0) drop-shadow(0 0 22px rgba(251, 191, 36, 0.28)); }
+  0%   { transform: translateY(0.28em) scale(1.16); opacity: 0; filter: blur(8px) drop-shadow(0 0 22px var(--gold-glow)); }
+  60%  { transform: none; opacity: 1; filter: blur(0) drop-shadow(0 0 22px var(--gold-glow)); }
   75%  { transform: scale(0.985); }
   100% { transform: scale(1); }
 }
@@ -432,8 +479,8 @@
 .scr-bid-row { /* keyed-by: absolute bid index — old rows never remount */
   display: flex; align-items: center; gap: 12px;
   height: 46px; padding: 0 14px 0 0;
-  background: rgba(10, 17, 32, 0.85);
-  border-bottom: 1px solid rgba(30, 42, 68, 0.6);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
   overflow: hidden;
   animation: scrRowIn 320ms var(--ease-out) both;
 }
@@ -468,7 +515,7 @@
   font-family: var(--font-display);
   font-size: clamp(90px, 16vw, 240px);
   letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
-  color: rgba(255, 255, 255, 0.04);
+  color: rgba(var(--tex), 0.05);
   animation: scrBreathe 6s ease-in-out infinite alternate;
   pointer-events: none;
 }
@@ -544,7 +591,7 @@
 .scr-ticker-track.static { margin: 0 auto; }
 .scr-signing {
   display: flex; align-items: center; gap: 12px;
-  background: rgba(10, 17, 32, 0.9);
+  background: var(--panel-strong);
   border: 1px solid var(--line);
   border-left: 4px solid var(--team);
   padding: 8px 16px 8px 10px; white-space: nowrap;
@@ -608,7 +655,7 @@
   font-variant-numeric: tabular-nums; color: var(--danger);
   animation: scrDeltaFloat 1.4s var(--ease-out) both;
 }
-.scr-delta.up { color: #4ade80; }
+.scr-delta.up { color: var(--live); }
 @keyframes scrDeltaFloat {
   0% { transform: translateY(6px); opacity: 0; }
   20% { transform: translateY(0); opacity: 1; }
@@ -621,7 +668,7 @@
 }
 .scr-fuel { /* purse depletion bar */
   position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
-  background: rgba(30, 42, 68, 0.8);
+  background: var(--fuel-track);
 }
 .scr-fuel i { /* stable — transition tweens scaleX across renders */
   display: block; height: 100%;
@@ -871,7 +918,7 @@
 
 .scr-timeout .scr-final-sub { margin-bottom: 26px; }
 .scr-to-purse {
-  background: rgba(10, 17, 32, 0.9);
+  background: var(--panel-strong);
   border: 1px solid var(--line); border-top: none;
   padding: 12px;
 }
@@ -884,7 +931,7 @@
   font-family: var(--font-display); font-size: clamp(24px, 2.8vw, 40px);
   color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
 }
-.scr-to-purse .scr-fuel { position: relative; height: 6px; margin: 8px 0; background: rgba(30, 42, 68, 0.8); }
+.scr-to-purse .scr-fuel { position: relative; height: 6px; margin: 8px 0; background: var(--fuel-track); }
 .scr-to-purse .row2 {
   display: flex; justify-content: space-between; gap: 8px;
   font-size: clamp(12px, 1.2vw, 16px); font-weight: 600; color: var(--mid);
@@ -953,7 +1000,7 @@
 .scr-final-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
 .scr-final-row {
   display: flex; align-items: center; gap: 10px;
-  background: rgba(10, 17, 32, 0.9);
+  background: var(--panel-strong);
   padding: 8px 12px;
   border-left: 3px solid transparent;
   animation: scrRowReveal 360ms var(--ease-out) both;

@@ -5,8 +5,8 @@ import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { PlayerView, StateView, WatchlistEntry } from '../types';
 import {
-  ConnectionDot, fmt, formatClock, Modal, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, TierBadge,
-  TIMEOUT_COUNTDOWN_MS, useAction, useCountdown,
+  ConnectionDot, fmt, formatClock, Modal, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, ThemeToggle,
+  TierBadge, TIMEOUT_COUNTDOWN_MS, useAction, useCountdown,
 } from '../ui';
 
 export default function TeamPage() {
@@ -58,6 +58,7 @@ export default function TeamPage() {
           <button className={`tab${tab === 'pool' ? ' active' : ''}`} onClick={() => setTab('pool')}>Pool & watchlist</button>
         </nav>
         <div className="topbar-right">
+          <ThemeToggle />
           <ConnectionDot connected={connected} />
           <button className="btn ghost" onClick={() => { clearSession(); refresh(); navigate('/'); }}>Exit</button>
         </div>

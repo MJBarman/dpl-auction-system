@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
-import { BidSoundToggle, ConnectionDot, OfflineBanner, useBidSound } from '../ui';
+import { BidSoundToggle, ConnectionDot, OfflineBanner, ThemeToggle, useBidSound } from '../ui';
 import AuctionConsole from '../admin/AuctionConsole';
 import LogTab from '../admin/LogTab';
 import PlayersTab from '../admin/PlayersTab';
@@ -62,6 +62,7 @@ export default function AdminPage() {
           ))}
         </nav>
         <div className="topbar-right">
+          <ThemeToggle />
           <BidSoundToggle muted={muted} onToggle={toggleMuted} />
           <ConnectionDot connected={connected} />
           <button className="btn ghost" onClick={signOut}>Sign out</button>

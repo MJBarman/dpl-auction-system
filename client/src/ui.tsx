@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { LotView, PlayerStats, PlayerView, StateView, Tier } from './types';
 import { playBidSound, unlockAudio } from './sound';
+import { useTheme } from './theme';
 
 export const fmt = (n: number | null | undefined): string =>
   n === null || n === undefined ? '–' : n.toLocaleString('en-IN');
@@ -210,6 +211,23 @@ export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: 
       title={muted ? 'Bid sound is off — click to turn it on' : 'Bid sound is on — click to mute'}
     >
       {muted ? '🔇 Bid sound off' : '🔔 Bid sound on'}
+    </button>
+  );
+}
+
+/** Light/dark switch. Shows what a click will switch *to*, like a light switch. */
+export function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const toLight = theme === 'dark';
+  return (
+    <button
+      type="button"
+      className="btn ghost theme-toggle"
+      onClick={toggle}
+      aria-pressed={theme === 'light'}
+      title={toLight ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {toLight ? '☀️ Light' : '🌙 Dark'}
     </button>
   );
 }
