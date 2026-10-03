@@ -55,11 +55,19 @@ function numOrNull(v: unknown): number | null {
 function cleanStats(v: unknown): PlayerStats {
   const src = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   const stats: PlayerStats = {};
-  for (const key of ['mat', 'runs', 'batAvg', 'batSR', 'wkts', 'bowlAvg', 'econ', 'mvpS1', 'mvpS2', 'mvpS3'] as const) {
+  for (const key of [
+    'mat', 'runs', 'balls', 'batAvg', 'batSR', 'wkts', 'bestWkts', 'bowlAvg', 'econ',
+    'mvpTotal', 'mvpS1', 'mvpS2', 'mvpS3',
+  ] as const) {
     const n = numOrNull(src[key]);
     if (n !== null) stats[key] = n;
   }
-  if (typeof src.bestMvp === 'string' && src.bestMvp.trim()) stats.bestMvp = src.bestMvp.trim().slice(0, 40);
+  // Text stats: the highest score keeps its not-out star ("25*").
+  for (const key of ['hs', 'bestMvp'] as const) {
+    const raw = src[key];
+    const t = typeof raw === 'number' && Number.isFinite(raw) ? String(raw) : typeof raw === 'string' ? raw.trim() : '';
+    if (t && t !== '–' && t !== '-') stats[key] = t.slice(0, 40);
+  }
   return stats;
 }
 
@@ -643,7 +651,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     // Keep versions monotonic so clients never mistake the reset for stale state.
     fresh.version = (store.state.version ?? 0) + 1;
     store.replaceState(fresh);
-    store.logEvent('system', 'Factory reset — restored the original DPL Season 4 seed');
+    store.logEvent('system', 'Factory reset — restored the original DTC Season 3 seed');
     broadcast();
     res.json({ ok: true });
   });

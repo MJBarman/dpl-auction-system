@@ -1,6 +1,7 @@
-# DPL Season 4 — Live Auction System 🏏
+# DTC Season 3 — Live Auction System 🏏
 
-A production-ready, real-time player auction system built from the *DPL Season 4 Auction Plan* workbook.
+A production-ready, real-time player auction system, first built from the *DPL Season 4 Auction Plan*
+workbook and now seeded for the *Downtown Test Championship (DTC) Season 3* auction.
 One server, three faces:
 
 | Face | URL | Who |
@@ -28,13 +29,16 @@ Then open `http://localhost:4000`.
 For development (hot reload): `npm run dev` → client at `http://localhost:5173`, API at `:4000`.
 Tests: `npm test` (auction-engine unit tests).
 
-## Seeded with the real plan
+## Seeded with the real pool
 
-The database seeds itself from the Excel plan on first boot:
+The database seeds itself on first boot (and on *Factory reset*) from the DTC 3 player-category
+sheet (`DTC3_Player_Categories.pdf`, see [server/src/seed.ts](server/src/seed.ts)):
 
-- **31 pool players** across Diamond (base 1,000) / Gold (600) / Emerald (400) / New Players (200), with career stats, hot-list ranks, sleeper tags and scouting notes.
-- **4 franchises** with captains Kaustav Hazarika, Ashish Bhuyan, Padum Roy and Ankur Saikia, 10,000 pts purse each.
-- **Rules as written:** increments +100 to 1,000 · +200 to 3,000 · +500 above; purse guardrail (max bid = remaining − 200 × slots still needed to reach the 7-player minimum — a fresh team's max bid is 8,800, matching the sheet); squads of 7–8; a team that reaches the maximum exits bidding; Diamond → Gold → Emerald → New round order with random draws within each tier; accelerated round for unsold players; rule-8 auto-allotment (base price, largest remaining purse, below-minimum teams first).
+- **24 pool players** across Diamond 2 (base 1,000) / Gold 4 (600) / Emerald 12 (400) / New Players 6 (200), tiered by combined CricHeroes MVP points, with each player's DTC 1 + DTC 2 stats (MVP points per season, runs, balls, highest score, average, wickets, best wickets in an innings, economy) and scouting notes.
+- **2 teams:** Power Rangers (captain Ashish) and Underdogs (captain Saurav), 10,000 pts purse each. Captains are not in the pool.
+- **Rules:** increments +100 to 1,000 · +200 to 3,000 · +500 above; squads of exactly 12 (24 players ÷ 2 teams) — a full team exits bidding; purse guardrail (max bid = remaining − 400 × slots still needed to reach 12 — a fresh team's max bid is 5,600, and 400 per slot means a team can always afford Emerald and New players at base price); a strategic timeout after every 8 players; Diamond → Gold → Emerald → New round order with random draws within each tier; accelerated round for unsold players; rule-8 auto-allotment (base price, largest remaining purse, below-minimum teams first).
+
+The DPL Season 4 seed (31 players, 4 franchises) lives in git history.
 
 ## Built to flex (32 players / 8-a-side … 36 players / 9-a-side)
 

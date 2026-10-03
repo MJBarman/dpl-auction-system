@@ -9,6 +9,25 @@ export const fmt = (n: number | null | undefined): string =>
 export const statVal = (v: number | null | undefined): string =>
   v === null || v === undefined ? '–' : String(v);
 
+/** Two-decimal stats (MVP points, averages, economy) read "8.10", not "8.1". */
+const statDec = (v: number | null | undefined): string =>
+  typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '–';
+
+/** A player's stat line, as on the DTC 3 category sheet: combined MVP points,
+ *  then batting, then bowling. Missing values read "–". */
+export function statCells(stats: PlayerStats): [string, string][] {
+  return [
+    ['MVP Pts', statDec(stats.mvpTotal)],
+    ['Runs', statVal(stats.runs)],
+    ['Balls', statVal(stats.balls)],
+    ['HS', stats.hs || '–'],
+    ['Bat Avg', statDec(stats.batAvg)],
+    ['Wkts', statVal(stats.wkts)],
+    ['Best Wkts', statVal(stats.bestWkts)],
+    ['Econ', statDec(stats.econ)],
+  ];
+}
+
 export function tierFor(state: StateView, key: string): Tier | undefined {
   return state.settings.tiers.find((t) => t.key === key);
 }
@@ -24,21 +43,12 @@ export function TierBadge({ state, tierKey }: { state: StateView; tierKey: strin
 }
 
 export function StatsGrid({ stats, compact }: { stats: PlayerStats; compact?: boolean }) {
-  const cells: [string, string][] = [
-    ['Mat', statVal(stats.mat)],
-    ['Runs', statVal(stats.runs)],
-    ['Bat Avg', statVal(stats.batAvg)],
-    ['Bat SR', statVal(stats.batSR)],
-    ['Wkts', statVal(stats.wkts)],
-    ['Bowl Avg', statVal(stats.bowlAvg)],
-    ['Econ', statVal(stats.econ)],
-    ['Best MVP', stats.bestMvp ?? '–'],
-  ];
-  const shown = compact ? cells.filter(([, v]) => v !== '–') : cells;
-  if (shown.length === 0) return <div className="muted small">No prior DPL record — debut season.</div>;
+  const cells = statCells(stats);
+  const filled = cells.filter(([, v]) => v !== '–');
+  if (filled.length === 0) return <div className="muted small">No prior DTC record — debut season.</div>;
   return (
     <div className={`stats-grid${compact ? ' compact' : ''}`}>
-      {shown.map(([label, value]) => (
+      {(compact ? filled : cells).map(([label, value]) => (
         <div key={label} className="stat-cell">
           <div className="stat-value">{value}</div>
           <div className="stat-label">{label}</div>

@@ -9,17 +9,18 @@ function photoLinkFor(state: StateView, playerId: string): string | null {
   return code ? `${window.location.origin}/photo/${code}` : null;
 }
 
-const STAT_FIELDS: { key: string; label: string }[] = [
-  { key: 'mat', label: 'Matches' },
+// The DTC 1 + DTC 2 combined columns of the DTC 3 category sheet.
+const STAT_FIELDS: { key: string; label: string; text?: boolean }[] = [
+  { key: 'mvpTotal', label: 'MVP pts (total)' },
+  { key: 'mvpS1', label: 'MVP DTC 1' },
+  { key: 'mvpS2', label: 'MVP DTC 2' },
   { key: 'runs', label: 'Runs' },
+  { key: 'balls', label: 'Balls faced' },
+  { key: 'hs', label: 'Highest score', text: true }, // text: keeps the not-out star, e.g. 25*
   { key: 'batAvg', label: 'Bat avg' },
-  { key: 'batSR', label: 'Bat SR' },
   { key: 'wkts', label: 'Wickets' },
-  { key: 'bowlAvg', label: 'Bowl avg' },
+  { key: 'bestWkts', label: 'Best wkts (innings)' },
   { key: 'econ', label: 'Economy' },
-  { key: 'mvpS1', label: 'MVP S1' },
-  { key: 'mvpS2', label: 'MVP S2' },
-  { key: 'mvpS3', label: 'MVP S3' },
 ];
 
 export default function PlayersTab({ state }: { state: StateView }) {
@@ -147,7 +148,6 @@ function PlayerModal({ state, player, onClose }: { state: StateView; player: Pla
     demandRank: player?.demandRank ? String(player.demandRank) : '',
     sleeper: player?.sleeper ?? false,
     stats: Object.fromEntries(STAT_FIELDS.map((f) => [f.key, (player?.stats as any)?.[f.key] ?? ''])) as Record<string, unknown>,
-    bestMvp: player?.stats.bestMvp ?? '',
   }));
 
   const save = () =>
@@ -160,7 +160,7 @@ function PlayerModal({ state, player, onClose }: { state: StateView; player: Pla
         notes: form.notes,
         demandRank: form.demandRank === '' ? null : Number(form.demandRank),
         sleeper: form.sleeper,
-        stats: { ...form.stats, bestMvp: form.bestMvp },
+        stats: form.stats,
       };
       if (player) await api.put(`/api/admin/players/${player.id}`, body);
       else await api.post('/api/admin/players', body);
@@ -196,14 +196,13 @@ function PlayerModal({ state, player, onClose }: { state: StateView; player: Pla
             <label key={f.key}>{f.label}
               <input
                 className="input"
-                type="number"
-                step="any"
+                type={f.text ? 'text' : 'number'}
+                step={f.text ? undefined : 'any'}
                 value={String(form.stats[f.key] ?? '')}
                 onChange={(e) => setForm({ ...form, stats: { ...form.stats, [f.key]: e.target.value } })}
               />
             </label>
           ))}
-          <label>Best MVP<input className="input" value={form.bestMvp} onChange={(e) => setForm({ ...form, bestMvp: e.target.value })} /></label>
         </div>
       </details>
       <label>Notes<textarea className="input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>

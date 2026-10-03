@@ -33,11 +33,15 @@ export interface Settings {
 export interface PlayerStats {
   mat?: number | null;
   runs?: number | null;
+  balls?: number | null;    // balls faced
+  hs?: string | null;       // highest score, "*" = not out (e.g. "25*")
   batAvg?: number | null;
   batSR?: number | null;
   wkts?: number | null;
+  bestWkts?: number | null; // most wickets in an innings
   bowlAvg?: number | null;
   econ?: number | null;
+  mvpTotal?: number | null; // MVP points summed across the seasons below
   mvpS1?: number | null;
   mvpS2?: number | null;
   mvpS3?: number | null;

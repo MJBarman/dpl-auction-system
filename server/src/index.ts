@@ -42,7 +42,7 @@ if (fs.existsSync(clientDist)) {
   });
 } else {
   app.get('/', (_req, res) => {
-    res.type('text/plain').send('DPL Auction server is running. Build the client (npm run build) to serve the UI from here.');
+    res.type('text/plain').send('Auction server is running. Build the client (npm run build) to serve the UI from here.');
   });
 }
 
@@ -57,9 +57,10 @@ function lanAddresses(): string[] {
 }
 
 server.listen(PORT, HOST, () => {
+  const title = store.state.settings.auctionName;
   console.log('');
-  console.log('  DPL Season 4 Auction System');
-  console.log('  ---------------------------');
+  console.log(`  ${title}`);
+  console.log(`  ${'-'.repeat(title.length)}`);
   console.log(`  Node:    ${process.version}`);
   console.log(`  Local:   http://localhost:${PORT}`);
   for (const addr of lanAddresses()) {

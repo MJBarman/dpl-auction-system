@@ -48,7 +48,7 @@ export class Store {
     } else {
       this.state = buildInitialState();
       this.saveState();
-      this.logEvent('system', 'Fresh database initialised with the DPL Season 4 seed data');
+      this.logEvent('system', 'Fresh database initialised with the DTC Season 3 seed data');
     }
     const undoRow = this.db.prepare('SELECT value FROM kv WHERE key = ?').get('undo') as { value: string } | undefined;
     this.undoStack = undoRow ? (JSON.parse(undoRow.value) as AuctionSnapshot[]) : [];

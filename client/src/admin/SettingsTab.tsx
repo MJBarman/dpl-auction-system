@@ -172,7 +172,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
             Reset auction (keep pool)
           </button>
           <button className="btn warn" onClick={() => {
-            if (window.confirm('Factory reset? EVERYTHING returns to the original DPL Season 4 seed — teams, players, settings, codes.')) {
+            if (window.confirm('Factory reset? EVERYTHING returns to the original DTC Season 3 seed — teams, players, settings, codes.')) {
               run(() => api.post('/api/admin/factory-reset', { confirm: true }), 'Factory reset done');
             }
           }}>

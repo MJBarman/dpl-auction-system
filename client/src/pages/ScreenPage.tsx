@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../store';
 import { LotView, PlayerView, StateView, Tier } from '../types';
 import {
-  fmt, formatClock, OfflineBanner, PlayerPhoto, SCREEN_BID_MUTE_KEY, statVal, TIMEOUT_COUNTDOWN_MS,
+  fmt, formatClock, OfflineBanner, PlayerPhoto, SCREEN_BID_MUTE_KEY, statCells, TIMEOUT_COUNTDOWN_MS,
   useBidSound, useCountdown,
 } from '../ui';
 import { useTheme } from '../theme';
@@ -234,16 +234,7 @@ function ScreenLot({ state, lot, player, tier, leading }: {
 }
 
 function PlayerPanel({ player, tier }: { player: PlayerView; tier?: Tier }) {
-  const cells: [string, string][] = [
-    ['Mat', statVal(player.stats.mat)],
-    ['Runs', statVal(player.stats.runs)],
-    ['Bat Avg', statVal(player.stats.batAvg)],
-    ['Bat SR', statVal(player.stats.batSR)],
-    ['Wkts', statVal(player.stats.wkts)],
-    ['Bowl Avg', statVal(player.stats.bowlAvg)],
-    ['Econ', statVal(player.stats.econ)],
-    ['Best MVP', player.stats.bestMvp ?? '–'],
-  ].filter(([, v]) => v !== '–') as [string, string][];
+  const cells = statCells(player.stats).filter(([, v]) => v !== '–');
 
   return (
     <div className="scr-id">
@@ -275,7 +266,7 @@ function PlayerPanel({ player, tier }: { player: PlayerView; tier?: Tier }) {
           ))}
         </div>
       ) : (
-        <div className="scr-debut">Debut season — no prior DPL record</div>
+        <div className="scr-debut">Debut season — no prior DTC record</div>
       )}
       {player.notes && <p className="scr-notes">{player.notes}</p>}
     </div>

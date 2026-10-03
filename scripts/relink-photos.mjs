@@ -8,9 +8,10 @@
 // backup) → lists the bucket → points each player's photoPath at the newest
 // object in their folder → restores the patched state via /api/admin/restore.
 //
-// Seeded players keep stable ids (p1, p2, …) across resets, so they re-link
-// automatically. Players added later via the admin UI get timestamp ids that
-// change on every reset — their folders are reported as orphans at the end.
+// Seeded players keep stable ids (dtc3-p1, dtc3-p2, …) across resets, so they
+// re-link automatically. Players added later via the admin UI get timestamp ids
+// that change on every reset — their folders are reported as orphans at the
+// end, as are the DPL Season 4 folders (p1…p31) from the previous auction.
 //
 // Usage (PowerShell):
 //   $env:ADMIN_PIN = "123456"

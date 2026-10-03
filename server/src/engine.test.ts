@@ -24,6 +24,100 @@ function playerByName(s: State, name: string) {
   return p!;
 }
 
+// ---- DTC 3 seed (DTC3_Player_Categories.pdf) ----------------------------------
+
+test('DTC 3 pool: 24 players — 2 Diamond, 4 Gold, 12 Emerald, 6 New', () => {
+  const s = fresh();
+  assert.equal(s.players.length, 24);
+  const count = (key: string) => s.players.filter((p) => p.tierKey === key).length;
+  assert.deepEqual(
+    { diamond: count('diamond'), gold: count('gold'), emerald: count('emerald'), new: count('new') },
+    { diamond: 2, gold: 4, emerald: 12, new: 6 },
+  );
+  assert.equal(new Set(s.players.map((p) => p.name)).size, 24, 'player names are unique');
+  assert.equal(new Set(s.players.map((p) => p.id)).size, 24, 'player ids are unique');
+});
+
+test('DTC 3 teams: Power Rangers (Ashish) and Underdogs (Saurav); captains are not in the pool', () => {
+  const s = fresh();
+  assert.deepEqual(
+    s.teams.map((t) => [t.id, t.name, t.captain]),
+    [['t1', 'Power Rangers', 'Ashish'], ['t2', 'Underdogs', 'Saurav']],
+  );
+  for (const t of s.teams) assert.ok(!s.players.some((p) => p.name === t.captain), `${t.captain} is not for sale`);
+});
+
+test('DTC 3 tiers follow the combined MVP points, highest first', () => {
+  const s = fresh();
+  const ranked = s.players.filter((p) => p.tierKey !== 'new');
+  assert.equal(ranked.length, 18);
+  // Seeded in overall-rank order: totals strictly fall from #1 Hirak to #18 Vishal.
+  for (let i = 1; i < ranked.length; i++) {
+    assert.ok(ranked[i - 1].stats.mvpTotal! > ranked[i].stats.mvpTotal!, `${ranked[i - 1].name} outranks ${ranked[i].name}`);
+  }
+  // Tier lines sit at the big drops: 25.2 → 19.3 (Diamond → Gold), 15.3 → 8.1 (Gold → Emerald).
+  for (const p of ranked) {
+    const mvp = p.stats.mvpTotal!;
+    assert.equal(p.tierKey, mvp >= 25 ? 'diamond' : mvp >= 15 ? 'gold' : 'emerald', `${p.name} (${mvp} MVP pts)`);
+  }
+  // New players have no DTC 1 or DTC 2 record at all.
+  for (const p of s.players.filter((x) => x.tierKey === 'new')) assert.deepEqual(p.stats, {});
+});
+
+test('DTC 3 stats: every MVP total matches its DTC 1 + DTC 2 split (to CricHeroes rounding)', () => {
+  const s = fresh();
+  for (const p of s.players.filter((x) => x.tierKey !== 'new')) {
+    const { mvpTotal, mvpS1, mvpS2 } = p.stats;
+    assert.ok(mvpS1 != null || mvpS2 != null, `${p.name} has a season split`);
+    const sum = (mvpS1 ?? 0) + (mvpS2 ?? 0);
+    assert.ok(Math.abs(sum - mvpTotal!) <= 0.011, `${p.name}: ${mvpS1} + ${mvpS2} vs total ${mvpTotal}`);
+  }
+});
+
+test('DTC 3 stats: batting and bowling lines are internally consistent', () => {
+  const s = fresh();
+  for (const p of s.players) {
+    const { runs, balls, hs, batAvg, wkts, bestWkts, econ } = p.stats;
+    if (hs != null) {
+      assert.match(hs, /^\d+\*?$/, `${p.name} HS`);
+      assert.ok(parseInt(hs, 10) <= runs!, `${p.name}: HS ${hs} within ${runs} runs`);
+      assert.ok(balls != null, `${p.name} batted, so balls faced are known`);
+    }
+    if (batAvg != null) {
+      // runs ÷ average = dismissals, a whole number (averages are printed to 2 dp).
+      const outs = runs! / batAvg;
+      assert.ok(Math.abs(outs - Math.round(outs)) < 0.01, `${p.name}: ${runs} runs at ${batAvg}`);
+    }
+    if (bestWkts != null) assert.ok(bestWkts <= wkts!, `${p.name}: best ${bestWkts} of ${wkts} wkts`);
+    if (wkts != null) assert.ok(econ != null, `${p.name} bowled, so economy is known`);
+  }
+});
+
+test('DTC 3 settings: squads of exactly 12 clear the pool with no feasibility warnings', () => {
+  const s = fresh();
+  assert.equal(s.settings.minSquad, 12);
+  assert.equal(s.settings.maxSquad, 12);
+  assert.equal(s.teams.length * s.settings.maxSquad, s.players.length);
+  assert.deepEqual(engine.feasibilityWarnings(s), []);
+  // The DPL squads (7–8) could never clear this pool: 2 × 8 = 16 < 24.
+  s.settings.minSquad = 7;
+  s.settings.maxSquad = 8;
+  assert.ok(engine.feasibilityWarnings(s).some((w) => w.includes('8 player(s) cannot be sold')));
+});
+
+test('DTC 3 reuses the DPL photos of the 14 returning players that still have one — one photo each', () => {
+  const s = fresh();
+  const withPhoto = s.players.filter((p) => p.photoPath);
+  assert.deepEqual(withPhoto.map((p) => p.name).sort(), [
+    'Amlan', 'Asif', 'Bhokto', 'Bineet', 'Chinmoy Sr', 'Dharmendra', 'Hirak',
+    'Jishnu', 'Kabya', 'Madhurjya', 'Sonu', 'Uddhab', 'Vishal', 'Yatrick',
+  ]);
+  assert.equal(playerByName(s, 'Chinmoy Sr').photoPath, 'players/p2/1783693432535.jpg'); // DPL "Chinmoy Deka"
+  // A new upload deletes the replaced object, so a shared photo would vanish for the other player.
+  assert.equal(new Set(withPhoto.map((p) => p.photoPath)).size, withPhoto.length, 'no two players share a photo');
+  for (const p of withPhoto) assert.match(p.photoPath!, /^players\/p\d+\/\d+\.(jpg|png|webp)$/, p.name);
+});
+
 // ---- increment ladder -------------------------------------------------------
 
 test('increment ladder matches the auction plan (+100 to 1000, +200 to 3000, +500 above)', () => {
@@ -38,8 +132,8 @@ test('increment ladder matches the auction plan (+100 to 1000, +200 to 3000, +50
 
 test('nextMinBid opens at base price then climbs the ladder', () => {
   const s = live();
-  const hirok = playerByName(s, 'Hirok Roy'); // diamond, base 1000
-  open(s, hirok.id);
+  const hirak = playerByName(s, 'Hirak'); // diamond, base 1000
+  open(s, hirak.id);
   assert.equal(engine.nextMinBid(s), 1000);
   engine.placeBid(s, 't1', undefined, 'admin', 1);
   assert.equal(s.lot!.bids[0].amount, 1000);
@@ -50,44 +144,83 @@ test('nextMinBid opens at base price then climbs the ladder', () => {
 
 // ---- purse guardrail ----------------------------------------------------------
 
-test('fresh team max bid matches the sheet: 10000 − 200 × 6 = 8800', () => {
+test('fresh team max bid keeps 400 for each of the other 11 slots: 10000 − 400 × 11 = 5600', () => {
   const s = fresh();
   const sum = engine.teamSummary(s, 't1');
-  assert.equal(sum.maxBid, 8800);
+  assert.equal(sum.maxBid, 5600);
   assert.equal(sum.remaining, 10000);
   assert.equal(sum.count, 0);
 });
 
 test('guardrail blocks a bid that would strand the minimum squad', () => {
   const s = live();
-  const hirok = playerByName(s, 'Hirok Roy');
-  open(s, hirok.id);
-  const check = engine.checkBid(s, 't1', 8900);
+  const hirak = playerByName(s, 'Hirak');
+  open(s, hirak.id);
+  const check = engine.checkBid(s, 't1', 5700);
   assert.equal(check.ok, false);
   assert.match(check.reason!, /guardrail/i);
-  assert.equal(engine.checkBid(s, 't1', 8800).ok, true);
+  assert.equal(engine.checkBid(s, 't1', 5600).ok, true);
 });
 
 test('guardrail relaxes as the squad fills', () => {
   const s = live();
   // Give t1 six players at base price via manual assignment (uses "manual" round).
-  const newPlayers = s.players.filter((p) => p.tierKey === 'new').slice(0, 6);
+  const newPlayers = s.players.filter((p) => p.tierKey === 'new');
+  assert.equal(newPlayers.length, 6);
   for (const p of newPlayers) engine.assignPlayer(s, p.id, 't1', 200);
-  const sum = engine.teamSummary(s, 't1');
+  let sum = engine.teamSummary(s, 't1');
   assert.equal(sum.count, 6);
   assert.equal(sum.remaining, 10000 - 1200);
-  // One more mandatory slot after this one? count=6 → after winning, 7 ≥ min → reserve 0.
-  assert.equal(sum.maxBid, 8800);
+  assert.equal(sum.maxBid, 8800 - 400 * 5); // five more mandatory slots after the next buy
+  // Five more → count 11: winning the next lot completes the squad → reserve 0.
+  for (const p of s.players.filter((x) => x.tierKey === 'emerald').slice(0, 5)) engine.assignPlayer(s, p.id, 't1', 500);
+  sum = engine.teamSummary(s, 't1');
+  assert.equal(sum.count, 11);
+  assert.equal(sum.remaining, 8800 - 2500);
+  assert.equal(sum.maxBid, sum.remaining);
+});
+
+test('the 400 reserve lets a team that spends its whole max bid on a Diamond still fill all 12', () => {
+  const s = live();
+  s.settings.timeoutEvery = 0; // no breaks in this walk-through
+  open(s, playerByName(s, 'Hirak').id);
+  engine.placeBid(s, 't1', 5600, 'admin', 1); // the most a fresh team may bid
+  engine.sellLot(s, 2);
+  assert.equal(engine.teamSummary(s, 't1').remaining, 4400); // = 400 × 11 open slots
+  const emeralds = s.players.filter((p) => p.tierKey === 'emerald').slice(0, 11);
+  for (const [i, p] of emeralds.entries()) {
+    open(s, p.id);
+    assert.equal(engine.teamSummary(s, 't1').maxBid, 400);
+    engine.placeBid(s, 't1', undefined, 'admin', 10 + i); // base price, 400
+    engine.sellLot(s, 10 + i);
+  }
+  const sum = engine.teamSummary(s, 't1');
+  assert.equal(sum.count, 12);
+  assert.equal(sum.full, true);
+  assert.equal(sum.remaining, 0);
+});
+
+test('why the reserve is 400: at 200, the same Diamond splurge prices a team out of every Emerald', () => {
+  const s = live();
+  s.settings.reservePerSlot = 200;
+  open(s, playerByName(s, 'Hirak').id);
+  engine.placeBid(s, 't1', 7800, 'admin', 1); // 10000 − 200 × 11
+  engine.sellLot(s, 2);
+  open(s, playerByName(s, 'Kabya').id); // emerald, base 400
+  const check = engine.checkBid(s, 't1', 400);
+  assert.equal(check.ok, false);
+  assert.match(check.reason!, /guardrail/i);
 });
 
 test('a full squad exits the auction', () => {
   const s = live();
-  const pool = s.players.filter((p) => p.tierKey === 'new' || p.tierKey === 'emerald').slice(0, 8);
+  const pool = s.players.filter((p) => p.tierKey === 'new' || p.tierKey === 'emerald').slice(0, s.settings.maxSquad);
+  assert.equal(pool.length, 12);
   for (const p of pool) engine.assignPlayer(s, p.id, 't1', 200);
   const sum = engine.teamSummary(s, 't1');
   assert.equal(sum.full, true);
-  const hirok = playerByName(s, 'Hirok Roy');
-  open(s, hirok.id);
+  const hirak = playerByName(s, 'Hirak');
+  open(s, hirak.id);
   const check = engine.checkBid(s, 't1', 1000);
   assert.equal(check.ok, false);
   assert.match(check.reason!, /full/i);
@@ -97,7 +230,7 @@ test('a full squad exits the auction', () => {
 
 test('leading bidder cannot raise against themselves', () => {
   const s = live();
-  open(s, playerByName(s, 'Kabya').id);
+  open(s, playerByName(s, 'Asif').id);
   engine.placeBid(s, 't1', undefined, 'admin', 1);
   assert.equal(engine.checkBid(s, 't1', 700).ok, false);
   assert.equal(engine.checkBid(s, 't2', 700).ok, true);
@@ -105,7 +238,7 @@ test('leading bidder cannot raise against themselves', () => {
 
 test('bid below the minimum is rejected', () => {
   const s = live();
-  open(s, playerByName(s, 'Kabya').id); // gold, base 600
+  open(s, playerByName(s, 'Asif').id); // gold, base 600
   assert.equal(engine.checkBid(s, 't1', 500).ok, false);
   engine.placeBid(s, 't1', 600, 'admin', 1);
   assert.equal(engine.checkBid(s, 't2', 650).ok, false); // min is 700
@@ -113,7 +246,7 @@ test('bid below the minimum is rejected', () => {
 
 test('undoBid removes only the last bid', () => {
   const s = live();
-  open(s, playerByName(s, 'Kabya').id);
+  open(s, playerByName(s, 'Asif').id);
   engine.placeBid(s, 't1', undefined, 'admin', 1);
   engine.placeBid(s, 't2', undefined, 'admin', 2);
   engine.undoBid(s);
@@ -125,22 +258,22 @@ test('undoBid removes only the last bid', () => {
 
 test('sellLot books the sale to the leading bidder and frees the lot', () => {
   const s = live();
-  const kabya = playerByName(s, 'Kabya');
-  open(s, kabya.id);
+  const asif = playerByName(s, 'Asif');
+  open(s, asif.id);
   engine.placeBid(s, 't1', undefined, 'admin', 1);
-  engine.placeBid(s, 't3', undefined, 'admin', 2);
+  engine.placeBid(s, 't2', undefined, 'admin', 2);
   const sale = engine.sellLot(s, 3);
-  assert.equal(sale.teamId, 't3');
+  assert.equal(sale.teamId, 't2');
   assert.equal(sale.price, 700);
-  assert.equal(kabya.status, 'sold');
-  assert.equal(kabya.round, 'main');
+  assert.equal(asif.status, 'sold');
+  assert.equal(asif.round, 'main');
   assert.equal(s.lot, null);
-  assert.equal(engine.teamSummary(s, 't3').spent, 700);
+  assert.equal(engine.teamSummary(s, 't2').spent, 700);
 });
 
 test('selling with no bids fails; passing with bids fails', () => {
   const s = live();
-  open(s, playerByName(s, 'Kabya').id);
+  open(s, playerByName(s, 'Asif').id);
   assert.throws(() => engine.sellLot(s, 1), /no bids/i);
   engine.placeBid(s, 't1', undefined, 'admin', 1);
   assert.throws(() => engine.passLot(s), /standing bid/i);
@@ -148,10 +281,10 @@ test('selling with no bids fails; passing with bids fails', () => {
 
 test('passLot marks the player unsold', () => {
   const s = live();
-  const kabya = playerByName(s, 'Kabya');
-  open(s, kabya.id);
+  const asif = playerByName(s, 'Asif');
+  open(s, asif.id);
   engine.passLot(s);
-  assert.equal(kabya.status, 'unsold');
+  assert.equal(asif.status, 'unsold');
   assert.equal(s.lot, null);
 });
 
@@ -159,7 +292,9 @@ test('passLot marks the player unsold', () => {
 
 test('drawNext walks tiers in order: all diamonds before any gold', () => {
   const s = live();
-  for (let i = 0; i < 4; i++) {
+  const diamonds = s.players.filter((p) => p.tierKey === 'diamond').length;
+  assert.equal(diamonds, 2);
+  for (let i = 0; i < diamonds; i++) {
     const p = engine.drawNext(s);
     assert.ok(p);
     assert.equal(p!.tierKey, 'diamond');
@@ -181,8 +316,8 @@ test('main round ends when everyone has been offered once', () => {
 test('accelerated round re-offers unsold players once per pass', () => {
   const s = live();
   for (const p of s.players) p.status = 'sold';
-  const a = playerByName(s, 'Papu');
-  const b = playerByName(s, 'Neev');
+  const a = playerByName(s, 'Jishnu');
+  const b = playerByName(s, 'Chandan');
   a.status = 'unsold';
   b.status = 'unsold';
   a.teamId = b.teamId = null;
@@ -207,25 +342,24 @@ test('accelerated round cannot start while the main round is unfinished', () => 
 
 // ---- allotment ----------------------------------------------------------------------
 
-test('allotUnsold sends players to the open-slot team with the largest purse, below-minimum teams first', () => {
+test('allotUnsold sends players to below-minimum teams first, even over a larger purse', () => {
   const s = live();
-  s.settings.minSquad = 1;
-  s.settings.maxSquad = 8;
-  // t1 has spent heavily; t2 has spent nothing but already has a player (meets min).
+  s.settings.minSquad = 2;
+  // t1 has spent heavily and is below the minimum; t2 meets it with plenty left.
   const gold = s.players.filter((p) => p.tierKey === 'gold');
   engine.assignPlayer(s, gold[0].id, 't1', 5000);
   engine.assignPlayer(s, gold[1].id, 't2', 600);
-  const papu = playerByName(s, 'Papu');
+  engine.assignPlayer(s, gold[2].id, 't2', 600);
+  const jishnu = playerByName(s, 'Jishnu');
   for (const p of s.players) if (p.status === 'available') p.status = 'sold';
-  papu.status = 'unsold';
-  papu.teamId = null;
-  papu.price = null;
-  // t3 and t4 are below min (0 players); both have 10000 remaining → t3 (fewest players tiebreak, equal) gets it.
+  jishnu.status = 'unsold';
+  jishnu.teamId = null;
+  jishnu.price = null;
   const out = engine.allotUnsold(s);
   assert.equal(out.length, 1);
-  assert.ok(['t3', 't4'].includes(out[0].teamId));
+  assert.equal(out[0].teamId, 't1'); // 5000 left vs t2's 8800, but t1 is below the minimum
   assert.equal(out[0].price, 400);
-  assert.equal(papu.round, 'allotted');
+  assert.equal(jishnu.round, 'allotted');
 });
 
 test('allotUnsold prefers the larger remaining purse among open teams', () => {
@@ -234,13 +368,12 @@ test('allotUnsold prefers the larger remaining purse among open teams', () => {
   const gold = s.players.filter((p) => p.tierKey === 'gold');
   engine.assignPlayer(s, gold[0].id, 't1', 9000);
   engine.assignPlayer(s, gold[1].id, 't2', 100);
-  const papu = playerByName(s, 'Papu');
+  const jishnu = playerByName(s, 'Jishnu');
   for (const p of s.players) if (p.status === 'available') p.status = 'sold';
-  papu.status = 'unsold';
-  papu.teamId = null;
+  jishnu.status = 'unsold';
+  jishnu.teamId = null;
   const out = engine.allotUnsold(s);
-  // t3/t4 untouched at 10000 — must beat t2's 9900.
-  assert.ok(['t3', 't4'].includes(out[0].teamId));
+  assert.equal(out[0].teamId, 't2'); // 9900 left beats t1's 1000
 });
 
 // ---- manual assignment & release ------------------------------------------------------
@@ -319,7 +452,7 @@ test('every 8th hammer ends the set with a strategic timeout; resume continues t
 test('accelerated round runs without automatic timeouts', () => {
   const s = live();
   for (const p of s.players) p.status = 'sold';
-  const unsoldNames = ['Papu', 'Neev', 'Kabya'];
+  const unsoldNames = ['Jishnu', 'Chandan', 'Kabya'];
   for (const name of unsoldNames) {
     const p = playerByName(s, name);
     p.status = 'unsold';
@@ -360,7 +493,7 @@ test('undoing the set-closing hammer also lifts the timeout', () => {
   hammer(s, 7);
   const p = engine.drawNext(s)!;
   engine.openLot(s, p.id, 90);
-  engine.placeBid(s, 't3', undefined, 'admin', 91);
+  engine.placeBid(s, 't1', undefined, 'admin', 91);
   const snap = engine.takeSnapshot(s, 'Undo: sale', 92);
   engine.sellLot(s, 93);
   assert.ok(s.timeout);
@@ -391,16 +524,16 @@ test('completeAuction refuses while players are unsold, unless forced', () => {
   assert.equal(s.stage, 'completed');
 });
 
-test('feasibility flags a pool that cannot fit team limits (robust for 32 vs 36 players)', () => {
+test('feasibility flags a pool that cannot fit team limits', () => {
   const s = fresh();
-  // 31 players, 4 teams, min 7 max 8 → [28, 32] contains 31 → no size warning.
+  // 24 players, 2 teams, squads of exactly 12 → [24, 24] contains 24 → no size warning.
   assert.equal(engine.feasibilityWarnings(s).filter((w) => w.includes('teams ×')).length, 0);
-  // 9-a-side scenario: min 8, max 9 → [32, 36]; 31 players is short.
-  s.settings.minSquad = 8;
-  s.settings.maxSquad = 9;
-  assert.ok(engine.feasibilityWarnings(s).some((w) => w.includes('needs 32')));
-  // Add 5 players → 36 → fits again.
-  for (let i = 0; i < 5; i++) {
+  // Squads of 13 → [26, 26]; 24 players is short.
+  s.settings.minSquad = 13;
+  s.settings.maxSquad = 13;
+  assert.ok(engine.feasibilityWarnings(s).some((w) => w.includes('needs 26')));
+  // Add 2 players → 26 → fits again.
+  for (let i = 0; i < 2; i++) {
     s.players.push({ ...s.players[0], id: `x${i}`, name: `Extra ${i}`, tierKey: 'new', status: 'available' });
   }
   assert.equal(engine.feasibilityWarnings(s).filter((w) => w.includes('teams ×')).length, 0);
@@ -424,7 +557,7 @@ test('a bid quoting a closed lot id is rejected (stale phone cannot bid on the w
   const staleLotId = s.lot!.id;
   engine.placeBid(s, 't1', undefined, 'admin', 1);
   engine.sellLot(s, 2);
-  open(s, playerByName(s, 'Hirok Roy').id);
+  open(s, playerByName(s, 'Hirak').id);
   assert.notEqual(s.lot!.id, staleLotId);
   assert.throws(() => engine.placeBid(s, 't2', undefined, 'team', 3, staleLotId), /too late/i);
   // Quoting the current lot id works.
@@ -434,7 +567,7 @@ test('a bid quoting a closed lot id is rejected (stale phone cannot bid on the w
 
 test('hammer guard rejects SOLD when a new bid landed after the auctioneer looked', () => {
   const s = live();
-  open(s, playerByName(s, 'Kabya').id);
+  open(s, playerByName(s, 'Asif').id);
   engine.placeBid(s, 't1', undefined, 'admin', 1); // 600
   // Auctioneer sees t1 @ 600 and reaches for the hammer…
   const seen = { lotId: s.lot!.id, expectedTeamId: 't1', expectedPrice: 600 };
@@ -452,7 +585,7 @@ test('passLot with a stale lot id is rejected', () => {
   open(s, playerByName(s, 'Kabya').id);
   const staleLotId = s.lot!.id;
   engine.passLot(s, staleLotId); // same lot — fine
-  open(s, playerByName(s, 'Hirok Roy').id);
+  open(s, playerByName(s, 'Hirak').id);
   assert.throws(() => engine.passLot(s, staleLotId), /too late/i);
 });
 
@@ -471,7 +604,7 @@ test('undo-bid quoting a closed lot id is rejected (late tap cannot pop the next
   const staleLotId = s.lot!.id;
   engine.placeBid(s, 't1', undefined, 'admin', 1);
   engine.sellLot(s, 2);
-  open(s, playerByName(s, 'Hirok Roy').id);
+  open(s, playerByName(s, 'Hirak').id);
   engine.placeBid(s, 't2', undefined, 'admin', 3);
   assert.throws(() => engine.undoBid(s, staleLotId), /too late/i);
   assert.equal(s.lot!.bids.length, 1); // t2's bid survived
@@ -482,7 +615,7 @@ test('undo-bid quoting a closed lot id is rejected (late tap cannot pop the next
 test('each opened lot gets a unique id', () => {
   const s = live();
   const ids = new Set<string>();
-  for (const name of ['Kabya', 'Hirok Roy']) {
+  for (const name of ['Kabya', 'Hirak']) {
     open(s, playerByName(s, name).id);
     ids.add(s.lot!.id);
     engine.cancelLot(s);

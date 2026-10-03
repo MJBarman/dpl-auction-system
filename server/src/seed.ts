@@ -1,14 +1,21 @@
 import { Player, PlayerStats, Settings, State, Team } from './types';
 
-// Seeded from "DPL_Season_4_Auction_Plan_1.xlsx" (exported 7 Jul 2026).
+// Seeded from "DTC3_Player_Categories.pdf" — the Downtown Test Championship
+// Season 3 auction (11 Oct): 24 pool players in four tiers, each with their
+// DTC 1 + DTC 2 combined stats (CricHeroes MVP points, batting, bowling — one
+// Test match per season). Captains are not in the pool.
 // Everything here is editable from the admin console after first boot.
 
 export const DEFAULT_SETTINGS: Settings = {
-  auctionName: 'DPL Season 4 Player Auction',
+  auctionName: 'DTC Season 3 Player Auction',
   purse: 10000,
-  minSquad: 7,
-  maxSquad: 8,
-  reservePerSlot: 200,
+  // 24 players ÷ 2 teams: every squad buys exactly 12 (captains excluded).
+  minSquad: 12,
+  maxSquad: 12,
+  // Each open slot keeps an Emerald base price in reserve. 18 of the 24
+  // players cost 400 or less, so a team can always complete its 12 even after
+  // a big early buy — at 200 a team could spend itself out of Emerald range.
+  reservePerSlot: 400,
   increments: [
     { upTo: 1000, step: 100 },
     { upTo: 3000, step: 200 },
@@ -26,10 +33,8 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 const TEAM_SEED: Omit<Team, 'code'>[] = [
-  { id: 't1', name: 'Franchise 1', captain: 'Kaustav Hazarika', color: '#f43f5e' },
-  { id: 't2', name: 'Franchise 2', captain: 'Ashish Bhuyan', color: '#3b82f6' },
-  { id: 't3', name: 'Franchise 3', captain: 'Padum Roy', color: '#10b981' },
-  { id: 't4', name: 'Franchise 4', captain: 'Ankur Saikia', color: '#f59e0b' },
+  { id: 't1', name: 'Power Rangers', captain: 'Ashish', color: '#f43f5e' },
+  { id: 't2', name: 'Underdogs', captain: 'Saurav', color: '#3b82f6' },
 ];
 
 interface PlayerSeed {
@@ -51,97 +56,97 @@ const P = (
   extra: { demandRank?: number; sleeper?: boolean } = {},
 ): PlayerSeed => ({ name, role, tierKey, stats, notes, ...extra });
 
+// In overall rank order (combined MVP points). Stats are exactly as printed in
+// the PDF; a field is left out where it shows "—" (didn't play / bat / bowl).
+// mvpS1 / mvpS2 = DTC 1 / DTC 2 MVP points; mvpTotal is the PDF's own total,
+// which can differ from their sum by 0.01 (CricHeroes rounding).
 const PLAYER_SEED: PlayerSeed[] = [
-  // ---- DIAMOND — base 1000 ----
-  P('Hirok Roy', 'Fast bowler', 'diamond',
-    { mat: 17, runs: 40, batAvg: 10, batSR: 105.26, wkts: 26, bowlAvg: 5.77, econ: 5.59, mvpS1: 12.864, mvpS2: 14.789, mvpS3: 14.96, bestMvp: '1st (S3)' },
-    'Reigning MVP (DPL 3). All-time top wicket-taker (26) with 5 maidens; bats at a 105 strike rate.',
-    { demandRank: 1 }),
-  P('Chinmoy Deka', 'All-rounder', 'diamond',
-    { mat: 15, runs: 197, batAvg: 15.15, batSR: 81.4, wkts: 17, bowlAvg: 7.06, econ: 5.71, mvpS1: 15.9, mvpS2: 16.574, mvpS3: 11.953, bestMvp: '1st (S1)' },
-    'DPL 1 MVP. No.1 all-time run-scorer and No.2 wicket-taker; never outside the MVP top 4.',
-    { demandRank: 2 }),
-  P('Yatrick', 'Bowling all-rounder', 'diamond',
-    { mat: 14, runs: 68, batAvg: 6.8, batSR: 75.56, wkts: 8, bowlAvg: 6.38, econ: 3.92, mvpS1: 6.784, mvpS2: 3.317, mvpS3: 13.567, bestMvp: '2nd (S3)' },
-    'DPL 3 MVP runner-up (10.647 bowling pts last season); three-season regular, career econ 3.92.',
-    { demandRank: 3 }),
-  P('Uddhab Deka', 'Fast bowler', 'diamond',
-    { mat: 7, wkts: 10, bowlAvg: 5.2, econ: 4.39, mvpS1: 2.796, mvpS3: 12.989, bestMvp: '3rd (S3)' },
-    'DPL 3 No.3. A wicket every 7.1 balls at a 4.39 economy — the stingiest 10-wicket bowler in the pool.',
-    { demandRank: 4 }),
+  // ---- DIAMOND — base 1000 · 25+ MVP pts and 10+ wickets each ----
+  P('Hirak', 'Fast bowler', 'diamond',
+    { mvpTotal: 38.29, mvpS1: 19.19, mvpS2: 19.11, runs: 16, balls: 29, hs: '12', batAvg: 5.33, wkts: 13, bestWkts: 5, econ: 2.47 },
+    'Highest MVP total in the pool — #2 in DTC 1, #1 in DTC 2. 13 wickets incl. a 5-wicket innings, 15 maidens, economy 2.47.'),
+  P('Padum', 'Fast bowler', 'diamond',
+    { mvpTotal: 25.23, mvpS1: 9.52, mvpS2: 15.71, runs: 8, balls: 13, hs: '8*', wkts: 10, bestWkts: 4, econ: 3.27 },
+    '#2 in DTC 2 with 7 wickets (best 4). 10 wickets overall at one every 13.2 balls — the best strike rate in the pool (min. 4 wkts).'),
 
-  // ---- GOLD — base 600 ----
-  P('Kabya', 'Top-order batter', 'gold',
-    { mat: 13, runs: 149, batAvg: 14.9, batSR: 71.63, wkts: 0, mvpS1: 2.48, mvpS2: 9.185, mvpS3: 3.915, bestMvp: '8th (S2)' },
-    'No.2 all-time run-scorer; 9.223 batting pts in DPL 2 — 2nd-best single-season batting tally ever.',
-    { demandRank: 5 }),
-  P('Jishnu', 'Batting all-rounder', 'gold',
-    { mat: 15, runs: 96, batAvg: 9.6, batSR: 75, wkts: 5, bowlAvg: 2, econ: 2.5, mvpS1: 6.149, mvpS2: 8.083, mvpS3: 4.672, bestMvp: '7th (S1)' },
-    'Top-10 MVP in all three seasons; joint-best bowling SR (4.80) among 5-wicket takers.',
-    { demandRank: 6 }),
-  P('Angshuman Sarma Baruah', 'Batter', 'gold',
-    { mat: 14, runs: 118, batAvg: 16.86, batSR: 78.15, wkts: 0, mvpS1: 1.203, mvpS2: 7.105, mvpS3: 3.818, bestMvp: '11th (S3)' },
-    'Best career average in the 100-run club (16.86); pure top-order bat, productive in S2 and S3.',
-    { demandRank: 7 }),
-  P('Asif Ali', 'Fast bowler', 'gold',
-    { mat: 12, wkts: 7, bowlAvg: 7.71, econ: 3.9, mvpS2: 10.308, mvpS3: 1.78, bestMvp: '6th (S2)' },
-    'DPL 2 No.6 MVP; best economy (3.90) among pool bowlers with 7+ wickets.',
-    { demandRank: 9 }),
-  P('Bhakta Bordoloi', 'Fast bowler', 'gold',
-    { mat: 4, wkts: 5, bowlAvg: 4, econ: 5, mvpS3: 6.4, bestMvp: '6th (S3)' },
-    'Top-6 MVP finish in his debut season; 5 wickets in just 24 balls.',
-    { demandRank: 8 }),
-  P('Chandan', 'Bowling all-rounder', 'gold',
-    { mat: 6, runs: 30, batAvg: 4.29, batSR: 66.67, wkts: 4, bowlAvg: 2.75, econ: 3.67, mvpS2: 7.793, mvpS3: 1.392, bestMvp: '11th (S2)' },
-    '7.793 MVP pts in DPL 2; career bowling average 2.75 at a 3.67 economy.'),
-  P('Rahul Ahmed', 'All-rounder', 'gold',
-    { mat: 7, runs: 17, batAvg: 8.5, batSR: 80.95, wkts: 5, bowlAvg: 8.2, econ: 5.12, mvpS2: 10.683, bestMvp: '4th (S2)' },
-    "DPL 2 No.4 MVP and the season's best fielding pts (2.160). Mapped to 'Rahul' (Team Faguni) — VERIFY identity.",
-    { demandRank: 10 }),
+  // ---- GOLD — base 600 · 15–19 MVP pts and 4–6 wickets each ----
+  P('Asif', 'All-rounder · RA fast', 'gold',
+    { mvpTotal: 19.35, mvpS1: 9.82, mvpS2: 9.52, runs: 36, balls: 29, hs: '16*', batAvg: 18.00, wkts: 4, bestWkts: 2, econ: 2.79 },
+    '#4 MVP in both seasons. 36 runs at a strike rate of 124 plus 4 wickets; most fielding points in the pool (2.30).'),
+  P('Kaustav', 'All-rounder · RA fast', 'gold',
+    { mvpTotal: 15.85, mvpS1: 9.93, mvpS2: 5.92, runs: 29, balls: 108, hs: '17', batAvg: 7.25, wkts: 4, bestWkts: 2, econ: 2.94 },
+    '#3 in DTC 1. 4 wickets with 7 maidens (economy 2.94), plus 29 runs.'),
+  P('Uddhab', 'Fast bowler', 'gold',
+    { mvpTotal: 15.33, mvpS1: 8.65, mvpS2: 6.68, wkts: 6, bestWkts: 3, econ: 2.89 },
+    '#7 MVP in both seasons. 6 wickets at an average of 8.67, incl. 3 in an innings in DTC 1; economy 2.89.'),
+  P('Bhokto', 'Fast bowler', 'gold',
+    { mvpTotal: 15.26, mvpS1: 9.55, mvpS2: 5.70, wkts: 5, bestWkts: 2, econ: 3.57 },
+    '#5 in DTC 1. 5 wickets from 22.4 overs with 7 maidens.'),
 
-  // ---- EMERALD — base 400 ----
-  P('Papu', 'Fast bowler', 'emerald',
-    { mat: 2, wkts: 3, bowlAvg: 4, econ: 6, mvpS3: 3.3, bestMvp: '13th (S3)' },
-    '3 wickets in just 12 balls during a two-match DPL 3 cameo.',
-    { sleeper: true }),
-  P('Neev', 'All-rounder', 'emerald',
-    { mat: 3, runs: 18, batAvg: 6, batSR: 72, wkts: 1, bowlAvg: 32, econ: 4, mvpS3: 3.378, bestMvp: '12th (S3)' },
-    'Contributed with bat and ball in DPL 3 (3.378 MVP pts).'),
-  P('Manash Barman', 'Batter (LHB)', 'emerald',
-    { mat: 3, runs: 24, batAvg: 12, batSR: 120, mvpS3: 3.211, bestMvp: '14th (S3)' },
-    "Pool's highest batting strike rate (120.0); left-handed finisher profile.",
-    { sleeper: true }),
-  P('Madhurja Mazumdar', 'Batter', 'emerald',
-    { mat: 5, runs: 17, batAvg: 4.25, batSR: 48.57, mvpS2: 1.212, mvpS3: 1.665, bestMvp: '18th (S3)' },
-    'Two-season squad player; handy fielder (0.840 fielding pts in DPL 3).'),
-  P('Jigyas', 'Spinner (SLA)', 'emerald',
-    { mat: 2, wkts: 2, bowlAvg: 5, econ: 5.45, mvpS1: 0.911, mvpS2: 0.878, bestMvp: '20th (S1)' },
-    'The only specialist spinner in the pool — scarcity value on a spin-friendly day.',
-    { sleeper: true }),
-  P('Sonu Bhaiya', 'Bowler (LA medium)', 'emerald',
-    { mat: 7, runs: 8, batAvg: 2.67, batSR: 61.54, wkts: 1, bowlAvg: 39, econ: 7.8, mvpS1: 0.403, mvpS2: 2.281, mvpS3: -0.146, bestMvp: '19th (S2)' },
-    'Left-arm variety; has featured in all three seasons.'),
-  P('Sujit Haloi (Tiku)', 'Medium bowler (LHB)', 'emerald',
-    { mat: 10, runs: 1, batAvg: 0.5, batSR: 16.67, wkts: 6, bowlAvg: 6, econ: 4, mvpS1: 2.54, mvpS2: 2.882, mvpS3: 2.943, bestMvp: '15th (S1)' },
-    "Three-season regular (the only bowler to appear in all 3 DPL editions). 6 wkts at avg 6.00, econ 4.00 — quietly reliable. Also known as 'Tiku'."),
-  P('Anjishnu', 'Batter', 'emerald',
-    { mat: 2, runs: 4, batAvg: 1, batSR: 28.57, mvpS1: 1.045, bestMvp: '18th (S1)' },
-    'DPL 1 experience; 0.600 of his MVP pts came from fielding.'),
-  P('Chinmoy Deka 2', 'Utility / batter', 'emerald',
-    { mat: 5, mvpS1: 0.206, mvpS2: 0.58, bestMvp: '24th (S1)' },
-    "Second 'Chinmoy Deka' profile, added late to DPL 4. Two quiet seasons (S1–S2); career line merged under 'Chinmoy Deka' on CricHeroes."),
-  P('Prasurjya Pratim Dutta', 'Utility / fielder', 'emerald',
-    { mat: 1, mvpS1: 0.224, bestMvp: '23rd (S1)' },
-    'All MVP points from fielding; athletic outfield option.'),
+  // ---- EMERALD — base 400 · batters, support bowlers and squad players, under 9 MVP pts ----
+  P('Kabya', 'Batter', 'emerald',
+    { mvpTotal: 8.10, mvpS1: 5.00, mvpS2: 3.10, runs: 64, balls: 159, hs: '25*', batAvg: 21.33 },
+    "Leading run-scorer in the pool (64). Topped DTC 1's batting chart with 46 runs (best 25*); DTC average 21.33."),
+  P('Jishnu', 'Batter', 'emerald',
+    { mvpTotal: 6.27, mvpS1: 2.70, mvpS2: 3.57, runs: 41, balls: 111, hs: '17', batAvg: 10.25 },
+    "41 runs across both seasons; 3rd on DTC 2's batting chart with 29. 2.15 fielding points."),
+  P('Chandan', 'Batter · part-time medium', 'emerald',
+    { mvpTotal: 5.44, mvpS1: 0.40, mvpS2: 5.04, runs: 16, balls: 61, hs: '12', batAvg: 4.00, wkts: 1, bestWkts: 1, econ: 8.00 },
+    '#10 in DTC 2: 12 runs, a wicket in his only over and 1.85 fielding pts — the best single-season fielding score in the pool.'),
+  P('Dharmendra', 'Fast bowler', 'emerald',
+    { mvpTotal: 5.16, mvpS1: 0.87, mvpS2: 4.29, runs: 4, balls: 3, hs: '4', batAvg: 4.00, wkts: 1, bestWkts: 1, econ: 3.00 },
+    '10 overs at an economy of 3.00 with 3 maidens; #12 in DTC 2.'),
+  P('Madhurjya', 'Batter', 'emerald',
+    { mvpTotal: 3.90, mvpS2: 3.90, runs: 39, balls: 86, hs: '35*', batAvg: 39.00 },
+    "DTC 2 only: 39 runs incl. 35*, average 39.00 — 2nd on that season's batting chart."),
+  P('Bineet', 'Batter', 'emerald',
+    { mvpTotal: 3.60, mvpS1: 1.00, mvpS2: 2.60, runs: 21, balls: 102, hs: '16', batAvg: 5.25 },
+    'Played both seasons: 21 runs (best 16 in DTC 2) and 1.50 fielding points.'),
+  P('Sonu', 'All-rounder · LA medium', 'emerald',
+    { mvpTotal: 3.35, mvpS2: 3.35, runs: 13, balls: 9, hs: '8', batAvg: 13.00, wkts: 1, bestWkts: 1, econ: 4.86 },
+    'DTC 2 only: 13 runs off 9 balls (strike rate 144) and 1 wicket with left-arm medium.'),
+  P('Chinmoy Sr', 'Batter · part-time medium', 'emerald',
+    { mvpTotal: 3.32, mvpS2: 3.32, runs: 28, balls: 40, hs: '20', batAvg: 14.00, wkts: 0, econ: 8.00 },
+    'DTC 2 only: 28 runs off 40 balls (best 20); bowled 1 over.'),
+  P('Amlan', 'Batter', 'emerald',
+    { mvpTotal: 0.82, mvpS2: 0.82, runs: 8, balls: 7, hs: '4*', batAvg: 8.00 },
+    'DTC 2 only: 8 runs off 7 balls (best 4*).'),
+  P('Deep', 'Batter (left-handed)', 'emerald',
+    { mvpTotal: 0.80, mvpS1: 0.80, runs: 8, balls: 24, hs: '8', batAvg: 4.00 },
+    'DTC 1 only: 8 runs as a left-handed bat.'),
+  P('Chinmoy Jr', 'Utility', 'emerald',
+    { mvpTotal: 0.70, mvpS1: 0.70 },
+    "DTC 1 only: didn't bat or bowl; all 0.70 MVP points came from fielding."),
+  P('Vishal', 'Off-spinner', 'emerald',
+    { mvpTotal: 0.09, mvpS1: -0.01, mvpS2: 0.09, runs: 1, balls: 3, hs: '1*', batAvg: 1.00, wkts: 0, econ: 6.00 },
+    'Both seasons (as “Vishal” and “Vishal Paul”): 2 overs of off-spin for 12 runs, and 1* with the bat.'),
 
-  // ---- NEW PLAYERS — base 200, first DPL season ----
-  ...['Ajit Ranjan', 'Amlan', 'Bineet', 'Deep', 'Dharmendra', 'Kaustav Saikia', 'Shubham Dey', 'Suman', 'Tanmay', 'Vishal']
-    .map((name) =>
-      P(name, 'Debut — role TBD', 'new', {},
-        name === 'Kaustav Saikia'
-          ? 'Debut season — no prior DPL record. Not the captain Kaustav Hazarika (verify identity).'
-          : 'Debut season — no prior DPL record.')),
+  // ---- NEW PLAYERS — base 200 · first DTC season, no DTC 1 or DTC 2 record ----
+  ...['Udit', 'Ronny', 'Abhigyan', 'Yatrick', 'Debanga', 'Alokesh']
+    .map((name) => P(name, 'Debut — role TBD', 'new', {}, '')),
 ];
+
+// Photos these players uploaded for DPL Season 4, reused for DTC 3 (the user
+// confirmed they are the same people): the newest object left in each one's
+// DPL bucket folder players/p<n>/, which only that player's DPL photo link
+// could write to. Chandan, Deep and Chinmoy Jr (DPL "Chinmoy Deka 2") have no
+// photo left there. A new upload through the player's DTC link replaces one.
+const DPL_PHOTOS: Record<string, string> = {
+  Hirak:      'players/p1/1783692815726.jpg', // DPL "Hirok Roy"
+  Asif:       'players/p8/1789999457056.jpg', // DPL "Asif Ali"
+  Uddhab:     'players/p4/1783693526411.jpg', // DPL "Uddhab Deka"
+  Bhokto:     'players/p9/1783693671755.jpg', // DPL "Bhakta Bordoloi"
+  Kabya:      'players/p5/1787575365043.jpg',
+  Jishnu:     'players/p6/1789998445217.jpg',
+  Dharmendra: 'players/p26/1783694082382.jpg',
+  Madhurjya:  'players/p15/1783693859130.jpg', // DPL "Madhurja Mazumdar"
+  Bineet:     'players/p24/1783694053816.jpg',
+  Sonu:       'players/p17/1789998369388.jpg', // DPL "Sonu Bhaiya"
+  'Chinmoy Sr': 'players/p2/1783693432535.jpg', // DPL "Chinmoy Deka"
+  Amlan:      'players/p23/1783694027133.jpg',
+  Vishal:     'players/p31/1783759203082.jpg',
+  Yatrick:    'players/p3/1783682646559.jpg',
+};
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 
@@ -196,7 +201,10 @@ export function ensureTimeoutFields(state: State): boolean {
 export function buildInitialState(): State {
   const teams: Team[] = TEAM_SEED.map((t) => ({ ...t, code: generateCode() }));
   const players: Player[] = PLAYER_SEED.map((p, i) => ({
-    id: `p${i + 1}`,
+    // Photos upload to players/<id>/… in the bucket, which still holds the
+    // DPL Season 4 folders p1…p31 — the "dtc3-" prefix keeps them apart
+    // (scripts/relink-photos.mjs matches folders to players by id).
+    id: `dtc3-p${i + 1}`,
     name: p.name,
     role: p.role,
     tierKey: p.tierKey,
@@ -210,7 +218,7 @@ export function buildInitialState(): State {
     price: null,
     round: null,
     offeredInPass: false,
-    photoPath: null,
+    photoPath: DPL_PHOTOS[p.name] ?? null,
     photoCode: generateCode(10),
   }));
   return {

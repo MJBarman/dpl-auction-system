@@ -42,7 +42,7 @@ export default function Landing() {
     <div className="landing">
       <header className="landing-hero">
         <div className="landing-title-row">
-          <h1>{state?.settings.auctionName ?? 'DPL Season 4 Player Auction'}</h1>
+          <h1>{state?.settings.auctionName ?? 'DTC Season 3 Player Auction'}</h1>
           <ConnectionDot connected={connected} />
           <ThemeToggle />
         </div>
