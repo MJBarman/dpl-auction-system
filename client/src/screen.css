@@ -997,11 +997,14 @@
   font-size: clamp(12px, 1.2vw, 15px); font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85;
 }
-.scr-final-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+/* Squads read top-to-bottom; a wide team column (2 teams × 12 players in DTC 3)
+   splits into two columns so a full roster still fits a 1080p projector. */
+.scr-final-rows { columns: 220px 2; column-gap: 8px; margin-top: 8px; }
 .scr-final-row {
   display: flex; align-items: center; gap: 10px;
   background: var(--panel-strong);
   padding: 8px 12px;
+  margin-bottom: 3px; break-inside: avoid;
   border-left: 3px solid transparent;
   animation: scrRowReveal 360ms var(--ease-out) both;
   animation-delay: calc(var(--ci) * 120ms + 300ms + var(--i) * 55ms);
