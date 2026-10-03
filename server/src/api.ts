@@ -57,7 +57,7 @@ function cleanStats(v: unknown): PlayerStats {
   const stats: PlayerStats = {};
   for (const key of [
     'mat', 'runs', 'balls', 'batAvg', 'batSR', 'wkts', 'bestWkts', 'bowlAvg', 'econ',
-    'mvpTotal', 'mvpS1', 'mvpS2', 'mvpS3',
+    'mvpTotal', 'mvpS1', 'mvpS2', 'mvpS3', 'mvpRankS1', 'mvpRankS2',
   ] as const) {
     const n = numOrNull(src[key]);
     if (n !== null) stats[key] = n;
@@ -83,6 +83,7 @@ function cleanSettings(body: unknown, current: Settings, state: State): Settings
   if (b.bidderBidding !== undefined) next.bidderBidding = Boolean(b.bidderBidding);
   if (b.timeoutEvery !== undefined) next.timeoutEvery = int(b.timeoutEvery, 'Timeout frequency', { min: 0, max: 500 });
   if (b.showTier !== undefined) next.showTier = Boolean(b.showTier);
+  if (b.rulesOnScreen !== undefined) next.rulesOnScreen = Boolean(b.rulesOnScreen);
 
   if (next.minSquad > next.maxSquad) throw new AuctionError('Minimum squad cannot exceed maximum squad');
 
@@ -479,6 +480,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   router.post('/admin/auction/start', requireAdmin, (req, res) => {
     mutate(null, 'auction', () => {
       engine.startAuction(store.state);
+      store.state.settings.rulesOnScreen = false; // the briefing is over — the projector goes live
       store.clearUndo();
     }, () => 'Auction started');
     res.json({ ok: true });

@@ -27,6 +27,7 @@ export interface Settings {
   bidderBidding: boolean;
   timeoutEvery: number; // strategic timeout after every N main-round players (0 = off)
   showTier: boolean; // show tier names/chips on screens (off hides them everywhere)
+  rulesOnScreen: boolean; // projector shows the rules board between lots
   tiers: Tier[];
 }
 
@@ -45,6 +46,8 @@ export interface PlayerStats {
   mvpS1?: number | null;
   mvpS2?: number | null;
   mvpS3?: number | null;
+  mvpRankS1?: number | null; // position in that season's MVP table (#n)
+  mvpRankS2?: number | null;
   bestMvp?: string | null;
 }
 
@@ -74,6 +77,7 @@ export interface TeamView {
   spent: number;
   remaining: number;
   count: number;
+  reserve: number; // kept back to fill the slots still needed after the next buy
   maxBid: number;
   full: boolean;
 }

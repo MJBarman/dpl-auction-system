@@ -43,7 +43,7 @@ export function publicState(state: State, undoLabel: string | null) {
         id: t.id, name: t.name, captain: t.captain, color: t.color,
         purse: state.settings.purse,
         spent: s.spent, remaining: s.remaining, count: s.count,
-        maxBid: s.maxBid, full: s.full,
+        reserve: s.reserve, maxBid: s.maxBid, full: s.full,
       };
     }),
     players: state.players.map((p) => ({

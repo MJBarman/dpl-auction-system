@@ -65,6 +65,46 @@ export function nextMinBid(state: State): number {
   return current + stepFor(state.settings, current);
 }
 
+/**
+ * Purse guardrail (rule 6): what a team must keep back to fill `slots` more
+ * places whichever players end up left for it. Each slot reserves the base
+ * price of one of the priciest players still to be sold (and never less than
+ * reservePerSlot). With exact-fill squads a rival can let the stars go unsold
+ * or fill up first, leaving you to take whatever remains — a flat reserve per
+ * slot can then strand a team that splurged early. This one cannot: every
+ * squad completes, every team can always open the bidding on every player at
+ * base price, and auto-allotment never runs out of purse.
+ */
+export function reserveFor(state: State, slots: number, excludePlayerId: string | null = null): number {
+  if (slots <= 0) return 0;
+  const prices = state.players
+    .filter((p) => p.status !== 'sold' && p.id !== excludePlayerId)
+    .map((p) => basePriceOf(state, p))
+    .sort((a, b) => b - a);
+  let total = 0;
+  for (let i = 0; i < slots; i++) total += Math.max(state.settings.reservePerSlot, prices[i] ?? 0);
+  return total;
+}
+
+/** The player the guardrail is pricing a bid on: the one on the block, or —
+ *  between lots — the cheapest player the next draw can bring up, so the max
+ *  bid shown between lots is one the team can really bid on the next lot. */
+function nextUpId(state: State): string | null {
+  if (state.lot) return state.lot.playerId;
+  let candidates: Player[] = [];
+  if (state.stage === 'accelerated') {
+    candidates = eligiblePool(state);
+  } else if (state.stage !== 'completed') {
+    const tiers = sortedTiers(state.settings);
+    for (let i = Math.max(0, tiers.findIndex((t) => t.key === state.currentTierKey)); i < tiers.length && candidates.length === 0; i++) {
+      candidates = state.players.filter((p) => p.status === 'available' && p.tierKey === tiers[i].key);
+    }
+    if (candidates.length === 0) candidates = state.players.filter((p) => p.status === 'available');
+  }
+  if (candidates.length === 0) return null;
+  return candidates.reduce((a, b) => (basePriceOf(state, b) < basePriceOf(state, a) ? b : a)).id;
+}
+
 export function teamSummary(state: State, teamId: string): TeamSummary {
   const { settings } = state;
   let spent = 0;
@@ -76,16 +116,17 @@ export function teamSummary(state: State, teamId: string): TeamSummary {
     }
   }
   const remaining = settings.purse - spent;
-  // Purse guardrail (rule 6): never bid past what still lets you fill the
-  // minimum squad at reserve price. Slots still needed AFTER winning this lot.
+  // Never bid past what still fills the minimum squad: keep back the reserve
+  // for the slots still needed AFTER winning this lot.
   const slotsAfterThis = Math.max(0, settings.minSquad - count - 1);
-  const maxBid = remaining - settings.reservePerSlot * slotsAfterThis;
+  const reserve = reserveFor(state, slotsAfterThis, nextUpId(state));
   return {
     id: teamId,
     spent,
     count,
     remaining,
-    maxBid: Math.max(0, maxBid),
+    reserve,
+    maxBid: Math.max(0, remaining - reserve),
     full: count >= settings.maxSquad,
   };
 }
@@ -217,9 +258,10 @@ export function checkBid(state: State, teamId: string, amount: number): BidCheck
   const min = nextMinBid(state);
   if (amount < min) return { ok: false, reason: `Minimum next bid is ${min} pts` };
   if (amount > summary.maxBid) {
+    const slots = Math.max(0, state.settings.minSquad - summary.count - 1);
     return {
       ok: false,
-      reason: `Exceeds max bid of ${summary.maxBid} pts (purse guardrail: ${summary.remaining} remaining − ${state.settings.reservePerSlot} × ${Math.max(0, state.settings.minSquad - summary.count - 1)} mandatory slots)`,
+      reason: `Exceeds max bid of ${summary.maxBid} pts (purse guardrail: ${summary.remaining} remaining − ${summary.reserve} kept back for the ${slots} more player${slots === 1 ? '' : 's'} the team still needs)`,
     };
   }
   return { ok: true };
@@ -548,9 +590,17 @@ export function feasibilityWarnings(state: State): string[] {
   if (settings.minSquad > settings.maxSquad) {
     warnings.push('Minimum squad is greater than maximum squad.');
   }
-  const cheapest = Math.min(...settings.tiers.map((t) => t.basePrice));
-  if (Number.isFinite(cheapest) && settings.reservePerSlot < cheapest) {
-    warnings.push(`Reserve per slot (${settings.reservePerSlot}) is below the cheapest base price (${cheapest}); the guardrail may not guarantee minimum squads.`);
+  // The guardrail keeps every team able to finish its squad at base prices;
+  // only an auctioneer override (manual assignment, a mid-auction settings or
+  // pool edit) can break that. Flag it before it surfaces as a stuck allotment.
+  for (const t of teams) {
+    const s = teamSummary(state, t.id);
+    const slots = settings.minSquad - s.count;
+    if (slots <= 0) continue;
+    const need = reserveFor(state, slots);
+    if (s.remaining < need) {
+      warnings.push(`${t.name} has ${s.remaining} pts left but the purse guardrail needs ${need} for its last ${slots} slot${slots === 1 ? '' : 's'}, so it may not be able to open the bidding. Release a player, or lower the reserve per slot or a base price.`);
+    }
   }
   return warnings;
 }

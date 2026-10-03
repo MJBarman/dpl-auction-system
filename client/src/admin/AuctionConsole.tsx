@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { api } from '../api';
 import { StateView } from '../types';
 import {
-  fmt, formatClock, PlayerBadges, PlayerPhoto, StatsGrid, TIMEOUT_COUNTDOWN_MS, TierBadge, useAction, useCountdown,
+  flatReserve, fmt, formatClock, lastTeamBuying, PlayerBadges, PlayerPhoto, StatsGrid, TIMEOUT_COUNTDOWN_MS, TierBadge,
+  useAction, useCountdown,
 } from '../ui';
 
 export default function AuctionConsole({ state }: { state: StateView }) {
@@ -98,10 +99,33 @@ function SetupPanel({ state }: { state: StateView }) {
         Round order: {state.settings.tiers.map((t) => t.name).join(' → ')}. Players are drawn at random within each tier (digital chit draw).
         Check Players / Teams / Settings tabs first — everything can still be edited later.
       </p>
+      <RulesToggle state={state} />
+      <p className="muted small">
+        Brief the captains with the rules on the projector, then start. Starting takes the rules down; captains also
+        have them on their phones under “How bidding works”.
+      </p>
       <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/start'), 'Auction is live!')}>
         ▶ Start the auction
       </button>
     </div>
+  );
+}
+
+/** Puts the rules board on the projector (between lots — any lot takes over). */
+function RulesToggle({ state }: { state: StateView }) {
+  const run = useAction();
+  const on = state.settings.rulesOnScreen;
+  return (
+    <button
+      className={`btn${on ? ' warn' : ''}`}
+      style={{ marginBottom: 10 }}
+      onClick={() => run(
+        () => api.put('/api/admin/settings', { rulesOnScreen: !on }),
+        on ? 'Rules taken off the big screen' : 'Rules are on the big screen',
+      )}
+    >
+      📋 {on ? 'Take the rules off the big screen' : 'Show the rules on the big screen'}
+    </button>
   );
 }
 
@@ -167,6 +191,7 @@ function BetweenLots({ state }: { state: StateView }) {
   const phaseDone = state.phase.remainingInPhase === 0;
   const sets = state.stage === 'live' ? setInfo(state) : null;
   const showTier = state.settings.showTier !== false;
+  const last = lastTeamBuying(state);
 
   return (
     <div className="card">
@@ -177,6 +202,11 @@ function BetweenLots({ state }: { state: StateView }) {
             {state.phase.remainingInPhase} player(s) left in this {state.stage === 'accelerated' ? 'pass' : 'round'}.
             {sets && ` Strategic timeout after ${sets.untilBreak} more player${sets.untilBreak === 1 ? '' : 's'} (set ${sets.setNumber}: ${sets.inSet}/${sets.every}).`}
           </p>
+          {last && (
+            <p className="notice info">
+              Only {last.name} still need players — each remaining player goes to them at base price.
+            </p>
+          )}
           <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/next'))}>
             🎲 Draw next player
           </button>
@@ -205,6 +235,7 @@ function BetweenLots({ state }: { state: StateView }) {
               ⏸ Call a strategic timeout now
             </button>
           </div>
+          <RulesToggle state={state} />
         </>
       ) : (
         <PhaseEnd state={state} />
@@ -274,7 +305,7 @@ function LotCard({ state }: { state: StateView }) {
           </div>
         </div>
       </div>
-      <StatsGrid stats={player.stats} />
+      <StatsGrid player={player} players={state.players} />
       {player.notes && <p className="notes">{player.notes}</p>}
       <BidHistory state={state} />
     </div>
@@ -428,7 +459,12 @@ function PurseTable({ state }: { state: StateView }) {
           ))}
         </tbody>
       </table>
-      <p className="muted small">Max bid = remaining − {state.settings.reservePerSlot} × slots still needed to reach {state.settings.minSquad}.</p>
+      <p className="muted small">
+        {flatReserve(state)
+          ? `Max bid = remaining − ${fmt(state.settings.reservePerSlot)} × players the team still needs after this one.`
+          : `Max bid = remaining − the base prices of the most expensive players still left, one for each player the team still needs after this one${state.settings.reservePerSlot > 0 ? ` (at least ${fmt(state.settings.reservePerSlot)} each)` : ''}.`}
+        {' '}So both teams can always finish their {state.settings.minSquad} and open the bidding on every player.
+      </p>
     </div>
   );
 }

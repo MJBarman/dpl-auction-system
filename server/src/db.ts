@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { AuctionSnapshot, EventRow, State } from './types';
-import { buildInitialState, ensurePhotoCodes, ensureTimeoutFields } from './seed';
+import { applyDataMigrations, buildInitialState, ensurePhotoCodes, ensureTimeoutFields } from './seed';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const MAX_UNDO = 200;
@@ -43,7 +43,7 @@ export class Store {
     if (row) {
       this.state = JSON.parse(row.value) as State;
       // Migrations for databases created before newer features.
-      const migrated = [ensurePhotoCodes(this.state), ensureTimeoutFields(this.state)];
+      const migrated = [ensurePhotoCodes(this.state), ensureTimeoutFields(this.state), applyDataMigrations(this.state)];
       if (migrated.some(Boolean)) this.saveState();
     } else {
       this.state = buildInitialState();
@@ -64,6 +64,7 @@ export class Store {
   replaceState(next: State): void {
     ensurePhotoCodes(next); // restored backups may predate the photo feature
     ensureTimeoutFields(next);
+    applyDataMigrations(next);
     this.state = next;
     this.undoStack = [];
     this.persistUndo();

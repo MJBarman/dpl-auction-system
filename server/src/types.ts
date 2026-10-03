@@ -30,6 +30,7 @@ export interface Settings {
   bidderBidding: boolean; // captains may bid from their own devices
   timeoutEvery: number;   // strategic timeout after every N main-round players (0 = off)
   showTier: boolean;      // show tier names/chips on screens (off hides them everywhere)
+  rulesOnScreen: boolean; // projector shows the rules board between lots
   tiers: Tier[];
 }
 
@@ -48,6 +49,8 @@ export interface PlayerStats {
   mvpS1?: number | null;
   mvpS2?: number | null;
   mvpS3?: number | null;
+  mvpRankS1?: number | null; // position in that season's MVP table (#n)
+  mvpRankS2?: number | null;
   bestMvp?: string | null;
 }
 
@@ -119,6 +122,7 @@ export interface State {
   timeout: TimeoutInfo | null;
   // teamId -> playerId -> entry (private captain planning data)
   watchlists: Record<string, Record<string, WatchlistEntry>>;
+  migrations?: string[]; // one-time data top-ups already applied (see seed.ts)
   version: number; // bumped on every mutation
 }
 
@@ -138,6 +142,7 @@ export interface TeamSummary {
   spent: number;
   count: number;
   remaining: number;
+  reserve: number; // kept back to fill the slots still needed after this lot
   maxBid: number;
   full: boolean;
 }

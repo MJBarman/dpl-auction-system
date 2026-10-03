@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { api, downloadUrl } from '../api';
 import { IncrementRung, StateView, Tier } from '../types';
-import { useAction, useToast } from '../ui';
+import { maxFirstBid, useAction, useToast } from '../ui';
 
 export default function SettingsTab({ state }: { state: StateView }) {
   const run = useAction();
@@ -26,6 +26,15 @@ export default function SettingsTab({ state }: { state: StateView }) {
   );
   const [pin, setPin] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // "With these numbers": the form's purse, squad and reserve, with each
+  // player on their tier's base price as edited here (per-player overrides kept).
+  const savedBase = new Map(s.tiers.map((t) => [t.key, t.basePrice]));
+  const formBase = new Map(tiers.map((t) => [t.key, Number(t.basePrice)]));
+  const firstBuyMax = maxFirstBid(
+    Number(form.purse), Number(form.minSquad), Number(form.reservePerSlot),
+    state.players.map((p) => (p.basePrice === savedBase.get(p.tierKey) ? formBase.get(p.tierKey) ?? p.basePrice : p.basePrice)),
+  );
 
   const save = () =>
     run(async () => {
@@ -86,6 +95,15 @@ export default function SettingsTab({ state }: { state: StateView }) {
             Captains may bid from their own devices
           </label>
         </div>
+        <p className="muted small">
+          Purse guardrail: for every player a team still needs after the one on the block, it keeps back the base
+          price of one of the most expensive players still left — or the reserve per slot, if that is more (0 = base
+          prices only). So both teams can always finish their squads and open the bidding on any player; a bigger
+          reserve per slot caps how much one player can take.
+          {Number(form.purse) > 0 && Number(form.minSquad) > 0
+            ? ` With these numbers a fresh team can bid at most ${firstBuyMax.toLocaleString('en-IN')}.`
+            : ''}
+        </p>
         <p className="muted small">
           Strategic timeout: the main round pauses after every {form.timeoutEvery || '0'} players auctioned so teams can regroup — the projector shows the standings until the auctioneer resumes. Set to 0 to turn timeouts off. The accelerated round runs without breaks.
         </p>

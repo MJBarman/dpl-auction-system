@@ -3,10 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
-import { PlayerView, StateView, WatchlistEntry } from '../types';
+import { PlayerView, StateView, TeamView, WatchlistEntry } from '../types';
 import {
-  ConnectionDot, fmt, formatClock, Modal, OfflineBanner, PlayerBadges, PlayerPhoto, StatsGrid, ThemeToggle,
-  TierBadge, TIMEOUT_COUNTDOWN_MS, useAction, useCountdown,
+  auctionRules, ConnectionDot, fmt, formatClock, lastTeamBuying, maxBidLine, Modal, OfflineBanner, PlayerBadges,
+  PlayerPhoto, StatsGrid, ThemeToggle, TierBadge, TIMEOUT_COUNTDOWN_MS, useAction, useCountdown,
 } from '../ui';
 
 export default function TeamPage() {
@@ -117,14 +117,25 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
   const myBidState = lot?.teamBidState.find((x) => x.teamId === teamId);
   const leading = lot?.leadingTeamId === teamId;
   const wl = player ? watchlist[player.id] : undefined;
+  const last = lastTeamBuying(state);
 
   return (
     <div className="live-grid">
       <div>
         {state.stage === 'setup' && (
-          <div className="card center-note">
-            <h2>Waiting for the auction to start…</h2>
-            <p className="muted">Use “Pool & watchlist” to plan: star targets and set your private max prices.</p>
+          <>
+            <div className="card center-note">
+              <h2>Waiting for the auction to start…</h2>
+              <p className="muted">Read how bidding works below, then use “Pool & watchlist” to plan: star targets and set your private max prices.</p>
+            </div>
+            <RulesCard state={state} team={team} />
+          </>
+        )}
+        {last && (
+          <div className="notice info">
+            {last.id === teamId
+              ? `${state.teams.length === 2 ? `${state.teams.find((t) => t.id !== teamId)?.name} have their` : 'Every other team has'} ${state.settings.maxSquad} — each remaining player comes to you at base price.`
+              : `You have your ${state.settings.maxSquad} — you are out of the bidding. The remaining players go to ${last.name} at base price.`}
           </div>
         )}
         {state.stage === 'completed' && <div className="card center-note"><h2>🏁 Auction complete</h2><p className="muted">Check “My squad” for your final roster.</p></div>}
@@ -181,7 +192,7 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                 </div>
               </div>
             </div>
-            <StatsGrid stats={player.stats} />
+            <StatsGrid player={player} players={state.players} />
             {player.notes && <p className="notes">{player.notes}</p>}
 
             {state.settings.bidderBidding ? (
@@ -208,7 +219,10 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
               <p className="muted small center-note">Call your bids out to the auctioneer — device bidding is off.</p>
             )}
             {!team.full && myBidState?.canBid === false && !leading && myBidState.reason?.startsWith('Exceeds') && (
-              <p className="muted small">The next bid would break your purse guardrail (max {fmt(team.maxBid)} pts).</p>
+              <p className="muted small">
+                The next bid would break your purse guardrail: max {fmt(team.maxBid)} pts, because {fmt(team.reserve)} pts
+                stay in reserve for the {Math.max(0, state.settings.minSquad - team.count - 1)} more players you need after this one.
+              </p>
             )}
           </div>
         )}
@@ -232,9 +246,31 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
 
       <div>
         <RivalsCard state={state} teamId={teamId} />
+        {state.stage !== 'setup' && <RulesCard state={state} team={team} />}
         <RecentSales state={state} teamId={teamId} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The rules in plain words, with this team's own guardrail arithmetic on top
+ * ("30,000 left − 5,800 kept for 11 more players = max bid 24,200"). Open
+ * before the auction starts; folded away (one tap to open) once it is running.
+ */
+function RulesCard({ state, team }: { state: StateView; team: TeamView }) {
+  const [open, setOpen] = useState(state.stage === 'setup');
+  return (
+    <details className="card rules-card" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>How bidding works</summary>
+      <p className="rules-you">{maxBidLine(state, team)}</p>
+      <ol className="rules-list">
+        {auctionRules(state).map((rule) => <li key={rule}>{rule}</li>)}
+      </ol>
+      {state.settings.bidderBidding && (
+        <p className="muted small">On this phone: press and hold the bid button — a quick tap does nothing.</p>
+      )}
+    </details>
   );
 }
 
@@ -407,7 +443,7 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
 
 function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: string; watchlist: Record<string, WatchlistEntry> }) {
   const run = useAction();
-  const [filter, setFilter] = useState<'all' | 'available' | 'starred'>('available');
+  const [filter, setFilter] = useState<'all' | 'available' | 'hot' | 'starred'>('available');
   const [editing, setEditing] = useState<PlayerView | null>(null);
   const showTier = state.settings.showTier !== false;
 
@@ -415,8 +451,10 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
     let list = [...state.players];
     if (filter === 'available') list = list.filter((p) => p.status !== 'sold');
     if (filter === 'starred') list = list.filter((p) => watchlist[p.id]?.starred);
+    if (filter === 'hot') return list.filter((p) => p.demandRank).sort((a, b) => (a.demandRank ?? 0) - (b.demandRank ?? 0));
     const tierOrder = new Map(state.settings.tiers.map((t) => [t.key, t.order]));
-    return list.sort((a, b) => (tierOrder.get(a.tierKey) ?? 99) - (tierOrder.get(b.tierKey) ?? 99) || (a.demandRank ?? 99) - (b.demandRank ?? 99));
+    return list.sort((a, b) => (tierOrder.get(a.tierKey) ?? 99) - (tierOrder.get(b.tierKey) ?? 99)
+      || (b.stats.mvpTotal ?? -Infinity) - (a.stats.mvpTotal ?? -Infinity));
   }, [state.players, filter, watchlist, state.settings.tiers]);
 
   const toggleStar = (p: PlayerView) => {
@@ -433,16 +471,19 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
       <div className="row space-between wrap">
         <h2>Player pool</h2>
         <div className="row">
-          {(['available', 'starred', 'all'] as const).map((f) => (
+          {(['available', 'hot', 'starred', 'all'] as const).map((f) => (
             <button key={f} className={`tab${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
-              {f === 'available' ? 'Still to buy' : f === 'starred' ? '⭐ Watchlist' : 'Everyone'}
+              {f === 'available' ? 'Still to buy' : f === 'hot' ? '🔥 Hot list' : f === 'starred' ? '⭐ Watchlist' : 'Everyone'}
             </button>
           ))}
         </div>
       </div>
-      <p className="muted small">⭐ stars, target prices and notes are private to your team — nobody else can see them.</p>
+      <p className="muted small">
+        Tap a player for their full DTC 1 + DTC 2 record. ⭐ stars, target prices and notes are private to your team — nobody else can see them.
+      </p>
+      <div className="table-scroll">
       <table className="table pool-table">
-        <thead><tr><th></th><th>Player</th>{showTier && <th>Tier</th>}<th>Role</th><th>Base</th><th>My target</th><th>Status</th></tr></thead>
+        <thead><tr><th></th><th>Player</th>{showTier && <th>Tier</th>}<th className="hide-narrow">Role</th><th>MVP</th><th>Base</th><th>My target</th><th>Status</th></tr></thead>
         <tbody>
           {players.map((p) => {
             const wl = watchlist[p.id];
@@ -458,7 +499,8 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                   {wl?.note ? <div className="muted small">📝 {wl.note}</div> : null}
                 </td>
                 {showTier && <td><TierBadge state={state} tierKey={p.tierKey} /></td>}
-                <td className="muted small">{p.role}</td>
+                <td className="muted small hide-narrow">{p.role}</td>
+                <td className="num">{p.stats.mvpTotal != null ? p.stats.mvpTotal.toFixed(2) : <span className="muted small">new</span>}</td>
                 <td className="num">{fmt(p.basePrice)}</td>
                 <td className="num">{wl?.targetPrice != null ? fmt(wl.targetPrice) : '—'}</td>
                 <td>
@@ -471,6 +513,7 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
           })}
         </tbody>
       </table>
+      </div>
       {editing && (
         <WatchlistModal
           state={state}
@@ -500,7 +543,7 @@ function WatchlistModal({ state, player, entry, onClose }: {
           <span className="muted">{player.role} · base {fmt(player.basePrice)} pts</span>
         </div>
       </div>
-      <StatsGrid stats={player.stats} compact />
+      <StatsGrid player={player} players={state.players} compact />
       {player.notes && <p className="notes">{player.notes}</p>}
       <hr className="sep" />
       <p className="muted small">Private planning — only your team sees this.</p>

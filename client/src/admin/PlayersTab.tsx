@@ -13,7 +13,9 @@ function photoLinkFor(state: StateView, playerId: string): string | null {
 const STAT_FIELDS: { key: string; label: string; text?: boolean }[] = [
   { key: 'mvpTotal', label: 'MVP pts (total)' },
   { key: 'mvpS1', label: 'MVP DTC 1' },
+  { key: 'mvpRankS1', label: 'DTC 1 MVP rank (#)' },
   { key: 'mvpS2', label: 'MVP DTC 2' },
+  { key: 'mvpRankS2', label: 'DTC 2 MVP rank (#)' },
   { key: 'runs', label: 'Runs' },
   { key: 'balls', label: 'Balls faced' },
   { key: 'hs', label: 'Highest score', text: true }, // text: keeps the not-out star, e.g. 25*

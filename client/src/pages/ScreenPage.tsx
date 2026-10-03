@@ -1,10 +1,10 @@
-import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../store';
-import { LotView, PlayerView, StateView, Tier } from '../types';
+import { LotView, PlayerView, StateView, TeamView, Tier } from '../types';
 import {
-  fmt, formatClock, OfflineBanner, PlayerPhoto, SCREEN_BID_MUTE_KEY, statCells, TIMEOUT_COUNTDOWN_MS,
-  useBidSound, useCountdown,
+  auctionRules, flatReserve, fmt, formatClock, freshMaxBid, lastTeamBuying, OfflineBanner, overallRank, PlayerPhoto,
+  SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown,
 } from '../ui';
 import { useTheme } from '../theme';
 import '../screen.css';
@@ -41,12 +41,55 @@ interface FlashInfo {
   price?: number;
 }
 
+/** Keeps the projector laptop's display awake while this page is showing.
+ *  The browser drops the lock whenever the tab is hidden, so it is taken
+ *  again each time the page comes back. Needs HTTPS or localhost; elsewhere
+ *  (or on battery saver) the request fails and the screen may still sleep. */
+function useWakeLock() {
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let pending = false;
+    let cancelled = false;
+    const acquire = async () => {
+      if (cancelled || lock || pending || document.visibilityState !== 'visible') return;
+      pending = true;
+      try {
+        const l = await navigator.wakeLock.request('screen');
+        if (cancelled) {
+          void l.release();
+          return;
+        }
+        lock = l;
+        l.addEventListener('release', () => {
+          if (lock === l) lock = null;
+        });
+      } catch {
+        /* not allowed here — the screen may sleep */
+      } finally {
+        pending = false;
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void acquire();
+    };
+    void acquire();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      void lock?.release().catch(() => {});
+    };
+  }, []);
+}
+
 export default function ScreenPage() {
   const { state, connected } = useApp();
   // Chime on each new bid; the projector keeps its own mute preference,
   // independent of the auctioneer's console.
   const { muted, toggleMuted } = useBidSound(state?.lot ?? null, SCREEN_BID_MUTE_KEY);
   const { theme, toggle: toggleTheme } = useTheme();
+  useWakeLock();
   const [flash, setFlash] = useState<FlashInfo | null>(null);
   const prevRef = useRef<StateView | null>(null);
   const flashIdRef = useRef(0);
@@ -111,13 +154,25 @@ export default function ScreenPage() {
     state.timeout ? 'Strategic timeout'
     : state.stage === 'setup' ? 'Starting soon'
     : state.stage === 'live'
-      ? (showTier ? `${state.settings.tiers.find((t) => t.key === state.currentTierKey)?.name ?? 'Live'} round` : 'Live round')
+      ? (state.phase.mainRoundDone && !lot ? 'Main round complete'
+        : showTier ? `${state.settings.tiers.find((t) => t.key === state.currentTierKey)?.name ?? 'Live'} round`
+        : 'Live round')
     : state.stage === 'accelerated' ? 'Accelerated round'
     : 'Auction complete';
+
+  // Which board fills the stage. The timeout and final boards carry every
+  // purse themselves, so the purse footer steps aside for them.
+  const view =
+    state.stage === 'completed' ? 'final'
+    : lot && lotPlayer ? 'lot'
+    : state.timeout ? 'timeout'
+    : state.settings.rulesOnScreen ? 'rules'
+    : 'idle';
 
   return (
     <div
       className="scr-page"
+      data-view={view}
       style={vars({
         '--tier': tierColor,
         '--tier-rgb': rgbTriplet(tierColor),
@@ -141,7 +196,7 @@ export default function ScreenPage() {
         </Link>
         <div
           className="scr-stagechip"
-          key={`${state.stage}-${state.currentTierKey ?? ''}${state.timeout ? '-to' : ''}`}
+          key={`${state.stage}-${state.currentTierKey ?? ''}${state.timeout ? '-to' : ''}-${stageLabel}`}
           data-stage={state.timeout ? 'timeout' : state.stage}
         >
           {stageLabel}
@@ -183,10 +238,14 @@ export default function ScreenPage() {
             ? <ScreenLot state={state} lot={lot} player={lotPlayer} tier={showTier ? tier : undefined} leading={leading} />
             : state.timeout
               ? <TimeoutBoard state={state} />
-              : <ScreenIdle state={state} showTier={showTier} />}
+              : state.settings.rulesOnScreen
+                ? <RulesBoard state={state} />
+                : <ScreenIdle state={state} showTier={showTier} />}
       </main>
 
-      <TeamsFooter state={state} leadingId={leading?.id ?? null} prevPurse={prevPurseRef.current} />
+      {view !== 'timeout' && view !== 'final' && (
+        <TeamsFooter state={state} leadingId={leading?.id ?? null} prevPurse={prevPurseRef.current} />
+      )}
 
       {flash && <FlashOverlay key={flash.id} flash={flash} />}
     </div>
@@ -204,25 +263,30 @@ function ScreenLot({ state, lot, player, tier, leading }: {
 }) {
   const { secs, frac } = useHammer(lot.timerEndsAt, state.serverTime);
   const amount = lot.currentBid ?? player.basePrice;
+  const leadKey = `${lot.id}-${leading?.id ?? 'open'}`;
 
   return (
     <div className="scr-lot">
-      <PlayerPanel key={player.id} player={player} tier={tier} />
+      <PlayerPanel key={player.id} player={player} players={state.players} tier={tier}>
+        <LotContext state={state} player={player} tier={tier} />
+      </PlayerPanel>
 
       <div className="scr-theatre">
         {leading && <div key={`edge-${lot.id}-${leading.id}`} className="scr-edgeflash" aria-hidden />}
         <div className="scr-theatre-top">
-          <div className="scr-takeover" key={`${lot.id}-${leading?.id ?? 'open'}`}>
+          <div className="scr-takeover" key={leadKey}>
             <div className="scr-eyebrow">{leading ? 'Current bid' : 'Opening price'}</div>
             <div className="scr-amount-wrap" key={`${lot.id}-${amount}`}>
               <div className="scr-amount">{fmt(amount)}</div>
               <i className="scr-shockwave" aria-hidden />
             </div>
-            <div className={`scr-plate${leading ? (darkInk(leading.color) ? ' dark-ink' : '') : ' open'}`}>
-              <span>{leading ? `Leading — ${leading.name}` : 'Who will open the bidding?'}</span>
-            </div>
           </div>
           {secs !== null && <CountdownRing secs={secs} frac={frac} />}
+        </div>
+        {/* A row of its own under the ring: beside it, "Leading — Power Rangers"
+            lost its last letters. keyed-by: team — wipes in on a lead change. */}
+        <div key={`plate-${leadKey}`} className={`scr-plate${leading ? (darkInk(leading.color) ? ' dark-ink' : '') : ' open'}`}>
+          <span>{leading ? `Leading — ${leading.name}` : 'Who will open the bidding?'}</span>
         </div>
         <div className="scr-nextmin">Next bid ≥ <b>{fmt(lot.nextMinBid)}</b></div>
         <BidFeed state={state} lot={lot} />
@@ -233,51 +297,142 @@ function ScreenLot({ state, lot, player, tier, leading }: {
   );
 }
 
-function PlayerPanel({ player, tier }: { player: PlayerView; tier?: Tier }) {
-  const cells = statCells(player.stats).filter(([, v]) => v !== '–');
+function PlayerPanel({ player, players, tier, children }: {
+  player: PlayerView;
+  players: PlayerView[];
+  tier?: Tier;
+  children?: ReactNode; // the lot's place in the auction, above the photo
+}) {
+  const groups = statGroups(player.stats, overallRank(players, player));
+  let cell = 0; // running index for the cascade animation across all rows
 
   return (
     <div className="scr-id">
-      <div className="scr-photo-wrap">
-        <div className="scr-photo-glow" aria-hidden />
-        <div className="scr-photo-frame">
-          <PlayerPhoto url={player.photoUrl} name={player.name} size="xl" />
+      {children}
+      <div className="scr-id-head">
+        <div className="scr-photo-wrap">
+          <div className="scr-photo-glow" aria-hidden />
+          <div className="scr-photo-frame">
+            <PlayerPhoto url={player.photoUrl} name={player.name} size="xl" />
+          </div>
+        </div>
+        <div className="scr-id-text">
+          {/* Long names step the type down so they never break mid-word. */}
+          <h1 className="scr-name" style={vars({ '--name-scale': Math.min(1, 7 / Math.max(7, player.name.length)) })}>
+            {player.name}
+          </h1>
+          <div className="scr-meta">
+            {tier && (
+              <span className="scr-tierchip" style={{ color: tier.color, borderColor: tier.color }}>
+                {tier.name}
+              </span>
+            )}
+            {player.role && <span className="scr-rolechip">{player.role}</span>}
+            {player.demandRank ? <span className="scr-badge hot">HOT #{player.demandRank}</span> : null}
+            {player.sleeper && <span className="scr-badge sleeper">SLEEPER</span>}
+            <span className="scr-basechip">Base {fmt(player.basePrice)}</span>
+          </div>
         </div>
       </div>
-      <h1 className="scr-name">{player.name}</h1>
-      <div className="scr-meta">
-        {tier && (
-          <span className="scr-tierchip" style={{ color: tier.color, borderColor: tier.color }}>
-            {tier.name}
-          </span>
-        )}
-        {player.role && <span className="scr-rolechip">{player.role}</span>}
-        {player.demandRank ? <span className="scr-badge hot">HOT #{player.demandRank}</span> : null}
-        {player.sleeper && <span className="scr-badge sleeper">SLEEPER</span>}
-        <span className="scr-basechip">Base {fmt(player.basePrice)}</span>
-      </div>
-      {cells.length > 0 ? (
-        <div className="scr-stats">
-          {cells.map(([label, value], i) => (
-            <div key={label} className="scr-stat" style={vars({ '--i': i })}>
-              <div className="scr-stat-v">{value}</div>
-              <div className="scr-stat-l">{label}</div>
+      {groups ? (
+        <div className="scr-statgroups">
+          {groups.map((g) => (
+            <div key={g.key} className="scr-sg">
+              <div className="scr-sg-title">{g.title}</div>
+              {g.items.length > 0 ? (
+                <div className="scr-sg-cells">
+                  {g.items.map((it) => (
+                    <div key={it.label} className="scr-stat" style={vars({ '--i': cell++ })}>
+                      <div className="scr-stat-v">{it.value}</div>
+                      <div className="scr-stat-l">
+                        {it.label}
+                        {it.rank ? <b className="scr-stat-rank"> · #{it.rank}</b> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="scr-sg-none" style={vars({ '--i': cell++ })}>{g.none}</div>
+              )}
             </div>
           ))}
         </div>
       ) : (
-        <div className="scr-debut">Debut season — no prior DTC record</div>
+        <div className="scr-debut">First DTC season — no DTC 1 or DTC 2 record</div>
       )}
       {player.notes && <p className="scr-notes">{player.notes}</p>}
     </div>
   );
 }
 
+/**
+ * Where this lot sits in the auction: "Player 9 of 24 · Emerald 3 of 12 ·
+ * Timeout after player 16". Position counts every other player already sold
+ * or unsold, so a re-offered or hand-assigned player can't skew it; the
+ * timeout comes from the server's hammer count, exactly as the engine calls it.
+ * In the accelerated round: how many unsold players are still to come.
+ */
+function LotContext({ state, player, tier }: { state: StateView; player: PlayerView; tier?: Tier }) {
+  const parts: string[] = [];
+  let alert: string | null = null;
+  if (state.stage === 'accelerated') {
+    const left = state.phase.remainingInPhase;
+    parts.push(left > 0 ? `${left} more unsold to come` : 'Last unsold player');
+  } else {
+    const done = (p: PlayerView) => p.id !== player.id && p.status !== 'available';
+    const n = state.players.filter(done).length + 1;
+    parts.push(`Player ${n} of ${state.players.length}`);
+    if (tier) {
+      const group = state.players.filter((p) => p.tierKey === player.tierKey);
+      parts.push(`${tier.name} ${group.filter(done).length + 1} of ${group.length}`);
+    }
+    const every = state.settings.timeoutEvery;
+    if (every > 0) {
+      const hammers = every - (state.phase.auctionedInMain % every); // to the break, this one included
+      if (hammers === 1) alert = 'Timeout after this player';
+      else if (n + hammers - 1 <= state.players.length) parts.push(`Timeout after player ${n + hammers - 1}`);
+    }
+  }
+  return (
+    <div className="scr-lotline">
+      {parts.map((p) => <span key={p}>{p}</span>)}
+      {alert && <span className="alert">{alert}</span>}
+    </div>
+  );
+}
+
 function BidFeed({ state, lot }: { state: StateView; lot: LotView }) {
   const rows = [...lot.bids].reverse().slice(0, 7);
-  if (rows.length === 0) return <div className="scr-feed empty">The floor is open…</div>;
+  const ref = useRef<HTMLDivElement>(null);
+  // On a projector the feed only gets the height left over (screen.css,
+  // "projector fit"); hide any older row that would show cut in half.
+  // Re-measured when the feed resizes and when a new row finishes sliding in.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const trim = () => {
+      const kids = Array.from(el.children) as HTMLElement[];
+      if (kids.length === 0) return;
+      const rowH = kids[0].offsetHeight || 46;
+      // New rows slide in from a negative top margin (all of them at once
+      // after a reload): count that space back in so an older row doesn't
+      // blink out mid-slide.
+      const sliding = kids.reduce((sum, k) => sum + Math.min(0, parseFloat(getComputedStyle(k).marginTop) || 0), 0);
+      const fit = Math.floor((el.clientHeight - sliding + 1) / rowH);
+      kids.forEach((row, i) => row.classList.toggle('cut', i >= fit));
+    };
+    trim();
+    const ro = new ResizeObserver(trim);
+    ro.observe(el);
+    el.addEventListener('animationend', trim);
+    return () => {
+      ro.disconnect();
+      el.removeEventListener('animationend', trim);
+    };
+  }, [lot.id, lot.bids.length]);
+  if (rows.length === 0) return <div ref={ref} className="scr-feed empty">The floor is open…</div>;
   return (
-    <div className="scr-feed">
+    <div ref={ref} className="scr-feed">
       {rows.map((b, i) => {
         const t = state.teams.find((x) => x.id === b.teamId);
         // Absolute index in the full history: old rows keep their key and
@@ -346,29 +501,25 @@ function ScreenIdle({ state, showTier }: { state: StateView; showTier: boolean }
   const watermark = state.settings.auctionName.split(/\s+/).slice(0, 3).join(' ');
   const marquee = recent.length >= 4;
   const copies = marquee ? [0, 1] : [0];
+  const hot = state.players
+    .filter((p) => p.demandRank)
+    .sort((a, b) => (a.demandRank ?? 0) - (b.demandRank ?? 0));
+  const { head, detail } = idleHeadline(state, showTier);
   return (
     <div className="scr-idle">
       <div className="scr-watermark" aria-hidden>{watermark}</div>
       <div className="scr-idle-headline">
-        {state.stage === 'setup' ? 'The auction begins shortly' : 'Next player coming up'}
+        {head}
+        {detail && <span className="scr-idle-detail">{detail}</span>}
       </div>
-      {showTier && (
-        <div className="scr-tierboard">
-          {state.progress.perTier.map((t) => {
-            const tc = state.settings.tiers.find((x) => x.key === t.tierKey)?.color ?? '#4f7cff';
-            return (
-              <div key={t.tierKey} className="scr-tierrow">
-                <span className="tname" style={{ color: tc }}>{t.name}</span>
-                <span className="tcount"><b>{t.sold}</b>/{t.total} sold</span>
-                <span className="scr-tierbar">
-                  <i style={vars({ '--tc': tc, transform: `scaleX(${t.total ? t.sold / t.total : 0})` })} />
-                </span>
-              </div>
-            );
-          })}
+      {(showTier || hot.length > 0) && (
+        <div className={`scr-boards${showTier && hot.length > 0 ? ' two' : ''}`}>
+          {showTier && <CategoryBoard state={state} />}
+          {hot.length > 0 && <HotListBoard state={state} players={hot} showTier={showTier} />}
         </div>
       )}
-      {state.phase.unsold > 0 && (
+      {/* once the main round is over, the headline carries this */}
+      {state.phase.unsold > 0 && !state.phase.mainRoundDone && (
         <div className="scr-unsold-note">
           {state.phase.unsold} unsold player{state.phase.unsold === 1 ? '' : 's'} will return in the accelerated round
         </div>
@@ -397,6 +548,169 @@ function ScreenIdle({ state, showTier }: { state: StateView; showTier: boolean }
   );
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** The idle headline: what the room is waiting for between lots — the next
+ *  draw's category with how many are left in it and their base price (the
+ *  draw walks the categories in order, like the engine), or what comes next
+ *  once the main round is over. */
+function idleHeadline(state: StateView, showTier: boolean): { head: ReactNode; detail: string | null } {
+  if (state.stage === 'setup') return { head: 'The auction begins shortly', detail: null };
+  const last = lastTeamBuying(state);
+  if (last) return { head: `${last.name} take the rest at base price`, detail: null };
+  if (state.stage === 'accelerated') {
+    const n = state.phase.remainingInPhase;
+    return {
+      head: 'Accelerated round',
+      detail: n > 0 ? `${plural(n, 'unsold player')} to come` : 'every unsold player has been offered',
+    };
+  }
+  if (state.phase.mainRoundDone) {
+    const n = state.phase.unsold;
+    return {
+      head: 'Main round complete',
+      detail: n > 0 ? `${plural(n, 'unsold player')} return in the accelerated round` : 'every player is sold',
+    };
+  }
+  if (showTier) {
+    const tiers = [...state.settings.tiers].sort((a, b) => a.order - b.order);
+    for (let i = Math.max(0, tiers.findIndex((t) => t.key === state.currentTierKey)); i < tiers.length; i++) {
+      const left = state.players.filter((p) => p.status === 'available' && p.tierKey === tiers[i].key);
+      if (left.length === 0) continue;
+      const bases = left.map((p) => p.basePrice);
+      const lo = Math.min(...bases);
+      const hi = Math.max(...bases);
+      return {
+        head: <>Next draw: <span className="tier" style={vars({ '--tc': tiers[i].color })}>{tiers[i].name}</span></>,
+        detail: `${left.length} left · base ${lo === hi ? fmt(lo) : `${fmt(lo)}–${fmt(hi)}`}`,
+      };
+    }
+  }
+  return { head: 'Next player coming up', detail: `${plural(state.progress.available, 'player')} left` };
+}
+
+/** Every category with its players — the same sheet both captains plan from.
+ *  Bought players take their team's colour, unsold ones are struck through. */
+function CategoryBoard({ state }: { state: StateView }) {
+  return (
+    <section className="scr-board scr-cats">
+      <div className="scr-board-title">Player categories</div>
+      {state.progress.perTier.map((t) => {
+        const tier = state.settings.tiers.find((x) => x.key === t.tierKey);
+        const tc = tier?.color ?? '#4f7cff';
+        return (
+          <div key={t.tierKey} className="scr-cat" style={vars({ '--tc': tc })}>
+            <div className="scr-cat-head">
+              <span className="tname">{t.name}</span>
+              {tier && <span className="tbase">base {fmt(tier.basePrice)}</span>}
+              <span className="tcount"><b>{t.sold}</b>/{t.total} sold</span>
+            </div>
+            <span className="scr-tierbar">
+              <i style={vars({ '--tc': tc, transform: `scaleX(${t.total ? t.sold / t.total : 0})` })} />
+            </span>
+            <div className="scr-cat-names">
+              {state.players.filter((p) => p.tierKey === t.tierKey).map((p) => {
+                const team = state.teams.find((x) => x.id === p.teamId);
+                return (
+                  <span
+                    key={p.id}
+                    className={`scr-cat-name ${p.status}`}
+                    style={team ? vars({ '--team': team.color }) : undefined}
+                    title={team ? `${team.name} · ${fmt(p.price)}` : undefined}
+                  >
+                    {p.name}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/** The hot list (players with a hot-list rank), with each one's headline
+ *  numbers and — once the hammer falls — who bought them and for how much. */
+function HotListBoard({ state, players, showTier }: { state: StateView; players: PlayerView[]; showTier: boolean }) {
+  return (
+    <section className="scr-board scr-hot">
+      <div className="scr-board-title">Hot list</div>
+      <ol className="scr-hot-list">
+        {players.map((p) => {
+          const tier = showTier ? state.settings.tiers.find((t) => t.key === p.tierKey) : undefined;
+          const team = state.teams.find((t) => t.id === p.teamId);
+          const line = statLine(p.stats);
+          return (
+            <li
+              key={p.id}
+              className={`scr-hot-row ${p.status}`}
+              style={team ? vars({ '--team': team.color }) : undefined}
+            >
+              <span className="hrank">{p.demandRank}</span>
+              <PlayerPhoto url={p.photoUrl} name={p.name} size="sm" />
+              <span className="hwho">
+                <span className="hname">{p.name}</span>
+                <span className="hmeta">
+                  {tier && <span style={{ color: tier.color }}>{tier.name}</span>}
+                  {tier && (line || p.role) ? ' · ' : ''}
+                  {line || p.role}
+                </span>
+              </span>
+              {p.stats.mvpTotal !== null && p.stats.mvpTotal !== undefined && (
+                <span className="hmvp">{p.stats.mvpTotal.toFixed(2)}<small>MVP pts</small></span>
+              )}
+              <span className="hstatus">
+                {p.status === 'sold'
+                  ? <><small>{team?.name}</small>{fmt(p.price)}</>
+                  : p.status === 'unsold' ? 'Unsold' : <><small>base</small>{fmt(p.basePrice)}</>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/* ---------------- rules board ---------------- */
+
+/**
+ * The rules for the room, in big type — the auctioneer puts it up from the
+ * console to brief the captains (it comes down when the auction starts, and
+ * any lot takes over the screen). Built from the live settings.
+ */
+function RulesBoard({ state }: { state: StateView }) {
+  const s = state.settings;
+  const tiles: [string, string][] = [
+    [fmt(s.purse), 'points per team'],
+    [s.minSquad === s.maxSquad ? String(s.minSquad) : `${s.minSquad}–${s.maxSquad}`, 'players each'],
+    // A flat reserve is one number worth a tile; the base-price rule is
+    // spelled out (with each category's price) in the first rule below.
+    ...(flatReserve(state) ? [[fmt(s.reservePerSlot), 'kept for every player still needed'] as [string, string]] : []),
+    [fmt(freshMaxBid(state)), 'biggest first bid'],
+  ];
+  return (
+    <div className="scr-rules">
+      <div className="scr-rules-title">How the auction works</div>
+      <div className="scr-rules-tiles">
+        {tiles.map(([value, label], i) => (
+          <div key={label} className="scr-rules-tile" style={vars({ '--i': i })}>
+            <b>{value}</b>
+            <span>{label}</span>
+          </div>
+        ))}
+      </div>
+      {/* the first rule restates the tiles */}
+      <ol className="scr-rules-list">
+        {auctionRules(state).slice(1).map((rule, i) => (
+          <li key={i} style={vars({ '--i': i })}>{rule}</li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 /* ---------------- strategic timeout board ---------------- */
 
 /**
@@ -415,16 +729,19 @@ function TimeoutBoard({ state }: { state: StateView }) {
   const shown = secs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000);
   return (
     <div className="scr-timeout">
-      <div className="scr-to-badge"><i aria-hidden />STRATEGIC TIMEOUT</div>
-      <div className={`scr-to-timer${finished ? ' done' : ''}${!finished && shown <= 30 ? ' urgent' : ''}`} role="timer" aria-live="off">
-        {finished ? (
-          <span className="scr-to-timer-done">Countdown finished</span>
-        ) : (
-          <>
-            <span className="scr-to-timer-clock">{formatClock(shown)}</span>
-            <span className="scr-to-timer-label">Time remaining</span>
-          </>
-        )}
+      {/* stacked on tall screens, side by side on short ones (screen.css) */}
+      <div className="scr-to-top">
+        <div className="scr-to-badge"><i aria-hidden />STRATEGIC TIMEOUT</div>
+        <div className={`scr-to-timer${finished ? ' done' : ''}${!finished && shown <= 30 ? ' urgent' : ''}`} role="timer" aria-live="off">
+          {finished ? (
+            <span className="scr-to-timer-done">Countdown finished</span>
+          ) : (
+            <>
+              <span className="scr-to-timer-clock">{formatClock(shown)}</span>
+              <span className="scr-to-timer-label">Time remaining</span>
+            </>
+          )}
+        </div>
       </div>
       <div className="scr-final-sub">
         {t.setNumber !== null ? `Set ${t.setNumber} complete · ` : ''}
@@ -487,29 +804,42 @@ function TeamsFooter({ state, leadingId, prevPurse }: {
   leadingId: string | null;
   prevPurse: Record<string, number>;
 }) {
+  const last = lastTeamBuying(state);
   return (
     <footer className="scr-foot">
       {state.teams.map((t) => {
         const prev = prevPurse[t.id];
         const delta = prev === undefined ? 0 : t.remaining - prev;
         const frac = t.purse > 0 ? Math.max(0, Math.min(1, t.remaining / t.purse)) : 0;
+        // OUT of this lot: the next bid is past the team's max bid. (A full
+        // squad reads FULL instead; the leader just can't outbid itself.)
+        const bid = state.lot?.teamBidState.find((b) => b.teamId === t.id);
+        const out = !!bid && !bid.canBid && !t.full && t.id !== leadingId;
         return (
           <div
             key={t.id}
-            className={`scr-cell${t.id === leadingId ? ' leading' : ''}${t.full ? ' full' : ''}`}
+            className={`scr-cell${t.id === leadingId ? ' leading' : ''}${t.full ? ' full' : ''}${out ? ' out' : ''}`}
             style={vars({ '--team': t.color, '--team-rgb': rgbTriplet(t.color) })}
           >
-            <div className="scr-cell-name">{t.name}</div>
-            <div className="scr-purse-row">
-              <span className="scr-purse" key={t.remaining}>{fmt(t.remaining)}</span>
-              {delta !== 0 && (
-                <span key={`d-${t.remaining}`} className={`scr-delta${delta > 0 ? ' up' : ''}`}>
-                  {delta > 0 ? `+${fmt(delta)}` : `−${fmt(-delta)}`}
-                </span>
-              )}
+            <div className="scr-cell-main">
+              <div className="scr-cell-name">{t.name}</div>
+              <div className="scr-purse-row">
+                <span className="scr-purse" key={t.remaining}>{fmt(t.remaining)}</span>
+                {delta !== 0 && (
+                  <span key={`d-${t.remaining}`} className={`scr-delta${delta > 0 ? ' up' : ''}`}>
+                    {delta > 0 ? `+${fmt(delta)}` : `−${fmt(-delta)}`}
+                  </span>
+                )}
+              </div>
+              <div className="scr-squad">
+                {t.count}/{state.settings.maxSquad} players{last?.id === t.id ? ' · gets the rest at base' : ''}
+              </div>
             </div>
-            <div className="scr-squad">
-              {t.count}/{state.settings.maxSquad} players{t.full ? ' · FULL' : ''}
+            <div className="scr-cell-side">
+              <span className="lbl">{t.full ? 'Squad' : out ? `Max bid ${fmt(t.maxBid)}` : 'Max bid'}</span>
+              <span className="val" key={t.full ? 'full' : out ? 'out' : t.maxBid}>
+                {t.full ? 'Full' : out ? 'Out' : fmt(t.maxBid)}
+              </span>
             </div>
             <div className="scr-fuel"><i style={{ transform: `scaleX(${frac})` }} /></div>
           </div>
@@ -602,11 +932,75 @@ function FlashOverlay({ flash }: { flash: FlashInfo }) {
 
 /* ---------------- final board ---------------- */
 
+interface Award {
+  key: string;
+  title: string;
+  caption: string;
+  player: PlayerView;
+  team?: TeamView;
+  detail: string;
+}
+
+/**
+ * The final board's three superlatives, each a different player: the top buy;
+ * the steal — the best DTC record (MVP points) bought at base price; and the
+ * best value — most MVP points per point spent among the rest. Players with
+ * no DTC record can only be the top buy.
+ */
+function finalAwards(state: StateView): Award[] {
+  const sold = state.players.filter((p) => p.status === 'sold' && p.price !== null);
+  const mvp = (p: PlayerView) => p.stats.mvpTotal ?? 0;
+  const price = (p: PlayerView) => p.price ?? 0;
+  const team = (p: PlayerView) => state.teams.find((t) => t.id === p.teamId);
+  const taken = new Set<string>();
+  const pick = (pool: PlayerView[], order: (a: PlayerView, b: PlayerView) => number) => {
+    const best = pool.filter((p) => !taken.has(p.id)).sort((a, b) => order(a, b) || a.name.localeCompare(b.name))[0];
+    if (best) taken.add(best.id);
+    return best;
+  };
+  const mvpPts = (p: PlayerView) => `${mvp(p).toFixed(2)} MVP pts`;
+
+  const top = pick(sold, (a, b) => price(b) - price(a) || mvp(b) - mvp(a));
+  const steal = pick(sold.filter((p) => mvp(p) > 0 && price(p) === p.basePrice), (a, b) => mvp(b) - mvp(a));
+  const value = pick(sold.filter((p) => mvp(p) > 0 && price(p) > 0), (a, b) => mvp(b) / price(b) - mvp(a) / price(a));
+
+  const awards: Award[] = [];
+  if (top) {
+    const over = price(top) > top.basePrice && top.basePrice > 0;
+    awards.push({
+      key: 'top', title: 'Top buy', caption: 'most expensive', player: top, team: team(top),
+      detail: over ? `${Math.round((price(top) / top.basePrice) * 10) / 10}× base`
+        : price(top) === top.basePrice ? 'at base' : `base ${fmt(top.basePrice)}`,
+    });
+  }
+  if (value) awards.push({ key: 'value', title: 'Best value', caption: 'most MVP pts per point', player: value, team: team(value), detail: mvpPts(value) });
+  if (steal) awards.push({ key: 'steal', title: 'Steal at base', caption: 'best record at base price', player: steal, team: team(steal), detail: mvpPts(steal) });
+  return awards;
+}
+
 function FinalBoard({ state }: { state: StateView }) {
+  const awards = finalAwards(state);
   return (
     <div className="scr-final">
       <div className="scr-final-title">Auction complete</div>
       <div className="scr-final-sub">{state.settings.auctionName}</div>
+      {awards.length > 0 && (
+        <div className="scr-awards">
+          {awards.map((a, i) => (
+            <div key={a.key} className="scr-award" style={vars({ '--i': i, '--team': a.team?.color ?? '#64748b' })}>
+              <div className="scr-award-title"><b>{a.title}</b> · {a.caption}</div>
+              <div className="scr-award-body">
+                <PlayerPhoto url={a.player.photoUrl} name={a.player.name} size="sm" />
+                <span className="awho">
+                  <span className="aname">{a.player.name}</span>
+                  <span className="ateam">{a.team?.name}</span>
+                </span>
+                <span className="afig">{fmt(a.player.price)}<small>{a.detail}</small></span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="scr-final-grid">
         {state.teams.map((t, ci) => {
           const squad = state.players
@@ -620,7 +1014,8 @@ function FinalBoard({ state }: { state: StateView }) {
             >
               <div className={`scr-final-head${darkInk(t.color) ? ' dark-ink' : ''}`} style={vars({ '--i': ci })}>
                 <h3>{t.name}</h3>
-                <div className="cap">Capt. {t.captain} · spent {fmt(t.spent)}</div>
+                {/* the purse footer is off this board — leftover points are worth nothing, so say so */}
+                <div className="cap">Capt. {t.captain} · spent {fmt(t.spent)} · {fmt(t.remaining)} unspent</div>
               </div>
               <div className="scr-final-rows">
                 {squad.length === 0 && <div className="scr-final-empty">No players signed</div>}
