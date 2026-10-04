@@ -1,0 +1,282 @@
+/* =============================================================================
+   adidas Running look: design tokens for dpl-auction-system
+   -----------------------------------------------------------------------------
+   Source: adidas.com/us/running-app (where runtastic.com now lands), plus
+   adidas.com/us/running, a product listing and a product page. Audited in a
+   live browser on 4 Oct 2026.
+   The palette, spacing, sizing, motion and type-scale values are adidas'
+   "Stripes v7" tokens, read from the site's computed CSS custom properties.
+   The two mint/green "Running app" colours were sampled from the app
+   screenshots on the page.
+   The fonts are free stand-ins: adidas' own typefaces are proprietary (see
+   HANDOFF.md §3.2).
+
+   HOW TO APPLY (also in HANDOFF.md §6)
+   1. Load the fonts in client/index.html (HANDOFF.md §6, step 0).
+   2. client/src/styles.css: replace the two variable blocks at L6-54 with
+      sections A, B, C and E below.
+   3. client/src/screen.css: replace the variable list inside .scr-page
+      (L14-42, keep the layout declarations after it) with section D, and
+      delete the light block at L60-82 (section D already covers both themes).
+   Section C only re-points variables the app already uses, so every screen
+   picks up the new colours and flat corners before any component is restyled.
+   No class names, data attributes or JS-set variables change.
+   ========================================================================== */
+
+
+/* -----------------------------------------------------------------------------
+   A. Raw scales: theme-independent. Never use these directly in components;
+      go through the semantic tokens in B.
+   -------------------------------------------------------------------------- */
+:root {
+  /* A1. Palette. Comment = the adidas token it comes from. */
+  --ad-black: #000000;            /* color-fill-primary / color-text-primary */
+  --ad-white: #ffffff;            /* color-fill-page */
+  --ad-grey-50: #f5f5f5;          /* color-fill-hover (on light) */
+  --ad-grey-100: #eceff1;         /* color-fill-secondary, surface-medium: tags, size cells, alt sections */
+  --ad-grey-200: #d9dbdd;         /* color-divider, fill-disabled, text-disabled */
+  --ad-grey-300: #929396;         /* color-border-inactive, border-hover (inputs, chips, hovered outlines) */
+  --ad-grey-500: #767677;         /* color-text-secondary */
+  --ad-grey-800: #3b3b3c;         /* color-divider-inverse, fill-disabled-inverse */
+  --ad-grey-900: #1e1e1e;         /* color-fill-hover-inverse (on dark) */
+  --ad-red: #e32b2b;              /* color-fill-error, text-sale, border-warning */
+  --ad-red-surface: #fff0f0;      /* color-surface-light-error */
+  --ad-green: #00aa55;            /* color-fill-success */
+  --ad-green-surface: #defbe6;    /* color-surface-medium-success */
+  --ad-orange: #d98916;           /* color-text-warning */
+  --ad-blue: #007bc6;             /* color-fill-brand */
+  --ad-club-green: #408267;       /* color-fill-membership (adiClub) */
+  --ad-club-green-hover: #336853; /* color-fill-membership-hover */
+  --ad-club-offwhite: #f5f4e7;    /* color-fill-membership-secondary */
+  --ad-run-mint: #8dfe8e;         /* adidas Running app "RUNNING" tile (sampled) */
+  --ad-run-green: #51ac6f;        /* adidas Running app progress ring (sampled) */
+
+  /* A2. Type families: free stand-ins for the adidas typefaces */
+  --ad-font-display: 'Anton', 'Arial Narrow', Impact, sans-serif;                        /* ≈ adidasFG Compressed Bold */
+  --ad-font-heading: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif; /* ≈ adidasFG Bold */
+  --ad-font-body: 'Barlow', 'Helvetica Neue', Helvetica, Arial, sans-serif;              /* ≈ AdihausDIN */
+  --ad-font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;                  /* ≈ Denton Light (optional) */
+
+  /* A3. Type scale. Use `font:` with the shorthand, then add tracking and case:
+       font: var(--ad-headline-m); letter-spacing: var(--ad-headline-m-track); text-transform: uppercase;
+     Desktop sizes; the media query below swaps in adidas' mobile sizes. */
+  --ad-display-xl: 400 80px/80px var(--ad-font-display);  --ad-display-xl-track: 2px;    /* hero headline, uppercase */
+  --ad-headline-l: 700 46px/48px var(--ad-font-heading);  --ad-headline-l-track: 3.5px;  /* page title, uppercase */
+  --ad-headline-m: 700 38px/40px var(--ad-font-heading);  --ad-headline-m-track: 3px;    /* section title, uppercase */
+  --ad-headline-s: 700 24px/28px var(--ad-font-heading);  --ad-headline-s-track: 2.5px;  /* card/product title, uppercase */
+  --ad-eyebrow:    700 14px/24px var(--ad-font-body);     --ad-eyebrow-track: 1px;       /* small caps heading, uppercase */
+  --ad-body-l:     400 18px/24px var(--ad-font-body);
+  --ad-body-m:     400 16px/24px var(--ad-font-body);
+  --ad-body-s:     400 14px/20px var(--ad-font-body);
+  --ad-body-xs:    400 12px/20px var(--ad-font-body);
+  --ad-label-caps: 400 12px/16px var(--ad-font-body);     --ad-label-caps-track: 1px;    /* tiny caps label, uppercase */
+  --ad-button:     700 16px/24px var(--ad-font-body);                                    /* sentence case */
+  --ad-price:      700 16px/24px var(--ad-font-body);
+  --ad-editorial:  300 16px/24px var(--ad-font-editorial);
+
+  /* A4. Spacing (adidas spacing-*) */
+  --ad-space-3xs: 2px;
+  --ad-space-2xs: 4px;
+  --ad-space-xs: 8px;
+  --ad-space-12: 12px;  /* spacing-container-horizontal-compact, chip/input side padding */
+  --ad-space-s: 16px;
+  --ad-space-m: 24px;
+  --ad-space-l: 32px;
+  --ad-space-xl: 40px;
+  --ad-space-2xl: 48px;
+  --ad-space-3xl: 64px;
+  --ad-space-4xl: 80px;
+
+  /* A5. Sizing (adidas sizing-*) */
+  --ad-size-button-s: 32px;
+  --ad-size-button-m: 40px;
+  --ad-size-button-l: 48px;
+  --ad-size-button-xl: 56px;   /* gl-cta--fallback */
+  --ad-size-buy: 60px;         /* product page "Add to bag" */
+  --ad-size-hit: 44px;         /* sizing-buttonicon-clickarea: minimum touch target */
+  --ad-size-icon: 24px;
+  --ad-size-icon-s: 20px;
+  --ad-size-tag: 28px;         /* gl-tag min-height */
+  --ad-size-chip: 32px;
+
+  /* A6. Shape */
+  --ad-radius: 0px;            /* every adidas web component is square */
+  --ad-border: 1px;
+  --ad-border-strong: 2px;
+  --ad-offset: 4px;            /* the signature offset outline behind CTAs */
+
+  /* A7. Motion (adidas gl-motion-*) */
+  --ad-ease: cubic-bezier(0.3, 0, 0, 1);
+  --ad-dur: 300ms;
+  --ad-dur-fast: 200ms;        /* chips */
+  --ad-dur-slow: 700ms;
+
+  /* A8. Layout (adidas grid@7) */
+  --ad-gutter-page: 14px;      /* ≥390: 30px, ≥768: 60px, ≥1440: 108px; ≥1920: centred, max 1600px */
+  --ad-grid-gap: 4px;          /* ≥768: 8px */
+  --ad-max: 1600px;
+}
+
+@media (max-width: 959px) {
+  :root {
+    --ad-display-xl: 400 30px/30px var(--ad-font-display);
+    --ad-headline-l: 700 38px/40px var(--ad-font-heading); --ad-headline-l-track: 3px;
+    --ad-headline-m: 700 30px/32px var(--ad-font-heading); --ad-headline-m-track: 3px;
+    --ad-headline-s: 700 20px/24px var(--ad-font-heading); --ad-headline-s-track: 2px;
+    --ad-body-l: 400 16px/24px var(--ad-font-body);
+  }
+}
+@media (min-width: 390px) { :root { --ad-gutter-page: 30px; } }
+@media (min-width: 768px) { :root { --ad-gutter-page: 60px; --ad-grid-gap: 8px; } }
+@media (min-width: 1440px) { :root { --ad-gutter-page: 108px; } }
+
+
+/* -----------------------------------------------------------------------------
+   B. Semantic tokens. Dark is the app's default theme, so it sits on :root,
+      and the light theme overrides it, matching the app's existing
+      html[data-theme] switch. Dark = adidas "ondark/inverse" values;
+      light = adidas "onlight" values.
+   -------------------------------------------------------------------------- */
+:root {
+  --ad-page: var(--ad-black);
+  --ad-surface: var(--ad-black);                 /* cards: black + 1px divider */
+  --ad-surface-alt: var(--ad-grey-900);          /* stat cells, tags, size-grid-style buttons */
+  --ad-hover: var(--ad-grey-900);
+  --ad-hover-alt: var(--ad-grey-800);            /* hover on a surface-alt element */
+  --ad-text: var(--ad-white);
+  --ad-text-rgb: 255, 255, 255;
+  --ad-text-2: var(--ad-grey-300);               /* DPL decision: adidas' inverse secondary is #d9dbdd; #929396 keeps labels visibly secondary on a projector */
+  --ad-text-disabled: var(--ad-grey-800);
+  --ad-divider: var(--ad-grey-800);
+  --ad-divider-soft: rgba(255, 255, 255, 0.2);   /* color-border-subtle-inverse */
+  --ad-border-input: var(--ad-grey-200);         /* color-border-inactive-inverse */
+  --ad-border-strong: var(--ad-white);
+  --ad-action: var(--ad-white);                  /* primary button fill */
+  --ad-on-action: var(--ad-black);
+  --ad-action-hover: var(--ad-grey-50);
+  --ad-action-disabled: var(--ad-grey-800);
+  --ad-on-action-disabled: rgba(255, 255, 255, 0.3);
+  --ad-inverse: var(--ad-white);                 /* selected / active / leading state */
+  --ad-on-inverse: var(--ad-black);
+  --ad-shade: rgba(255, 255, 255, 0.2);          /* color-fill-shade-inverse: "this is you" rows */
+  --ad-focus: var(--ad-white);
+  --ad-backdrop: rgba(0, 0, 0, 0.75);            /* gl-modal::backdrop */
+  --ad-success-text: var(--ad-green);
+  --ad-error-text: var(--ad-red);
+  --ad-warning-text: var(--ad-orange);
+  --ad-info-text: var(--ad-white);
+  --ad-live: var(--ad-green);
+  --ad-ring: var(--ad-run-mint);
+  --ad-error-surface: rgba(227, 43, 43, 0.16);   /* DPL decision: adidas ships no dark error surface */
+  --ad-success-surface: rgba(0, 170, 85, 0.16);  /* DPL decision */
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --ad-page: var(--ad-white);
+  --ad-surface: var(--ad-white);
+  --ad-surface-alt: var(--ad-grey-100);
+  --ad-hover: var(--ad-grey-50);
+  --ad-hover-alt: var(--ad-grey-200);            /* color-fill-secondary-hover */
+  --ad-text: var(--ad-black);
+  --ad-text-rgb: 0, 0, 0;
+  --ad-text-2: var(--ad-grey-500);
+  --ad-text-disabled: var(--ad-grey-200);
+  --ad-divider: var(--ad-grey-200);
+  --ad-divider-soft: var(--ad-grey-100);         /* color-divider-secondary */
+  --ad-border-input: var(--ad-grey-300);
+  --ad-border-strong: var(--ad-black);
+  --ad-action: var(--ad-black);
+  --ad-on-action: var(--ad-white);
+  --ad-action-hover: var(--ad-grey-900);
+  --ad-action-disabled: var(--ad-grey-200);
+  --ad-on-action-disabled: rgba(0, 0, 0, 0.3);
+  --ad-inverse: var(--ad-black);
+  --ad-on-inverse: var(--ad-white);
+  --ad-shade: rgba(0, 0, 0, 0.07);               /* color-fill-shade */
+  --ad-focus: var(--ad-black);
+  --ad-backdrop: rgba(0, 0, 0, 0.75);
+  --ad-success-text: var(--ad-club-green);       /* #00aa55 is only 3:1 on white; adiClub green is 4.9:1 */
+  --ad-error-text: var(--ad-red);
+  --ad-warning-text: var(--ad-black);            /* #d98916 is 2.7:1 on white: use black text + an orange icon or bar */
+  --ad-info-text: var(--ad-blue);
+  --ad-live: var(--ad-club-green);
+  --ad-ring: var(--ad-run-green);                /* the app's own ring colour on white */
+  --ad-error-surface: var(--ad-red-surface);
+  --ad-success-surface: var(--ad-green-surface);
+  color-scheme: light;
+}
+
+
+/* -----------------------------------------------------------------------------
+   C. Bridge: the app's existing variables (styles.css) re-pointed at the
+      semantic tokens. Declared once: because the --ad-* values switch with
+      html[data-theme], these follow automatically.
+   -------------------------------------------------------------------------- */
+:root {
+  --bg: var(--ad-page);
+  --bg2: var(--ad-surface-alt);
+  --surface: var(--ad-surface);
+  --surface2: var(--ad-surface-alt);
+  --border: var(--ad-divider);
+  --border-soft: var(--ad-divider-soft);
+  --text: var(--ad-text);
+  --muted: var(--ad-text-2);
+  --accent: var(--ad-action);
+  --accent-tint: var(--ad-shade);
+  --ok: var(--ad-green);
+  --warn: var(--ad-orange);
+  --danger: var(--ad-red);
+  --backdrop-hi: var(--ad-page);   /* flattens the radial glow on <body> */
+  --topbar-bg: var(--ad-page);     /* solid bar, no frosted glass */
+  --ok-text: var(--ad-success-text);
+  --info-text: var(--ad-info-text);
+  --danger-text: var(--ad-error-text);
+  --warn-soft: var(--ad-warning-text);
+  --radius: var(--ad-radius);
+}
+
+
+/* -----------------------------------------------------------------------------
+   D. Projector bridge. Goes in screen.css in place of the .scr-page variable
+      list. The money "gold" goes monochrome (white on black, black on white)
+      the adidas way. Mint is reserved for the countdown ring and the SOLD
+      moment (HANDOFF.md §3.1, colour roles).
+   -------------------------------------------------------------------------- */
+.scr-page {
+  --bg-0: var(--ad-page);
+  --bg-1: var(--ad-page);
+  --bg-2: var(--ad-surface-alt);
+  --line: var(--ad-divider);
+  --hi: var(--ad-text);
+  --mid: var(--ad-text-2);
+  --gold: var(--ad-text);
+  --gold-hi: var(--ad-text);
+  --gold-deep: var(--ad-text-2);
+  --danger: var(--ad-red);
+  --steel: var(--ad-grey-500);     /* unused today; kept so nothing dangles */
+  --panel: var(--ad-surface-alt);
+  --panel-strong: var(--ad-surface-alt);
+  --fuel-track: var(--ad-divider);
+  --tex: var(--ad-text-rgb);
+  --vignette: transparent;
+  --ambient-top: var(--ad-page);
+  --head-1: var(--ad-page);
+  --head-2: var(--ad-page);
+  --gold-glow: transparent;        /* no glows in this language */
+  --live: var(--ad-live);
+  --live-off: var(--ad-red);
+  --font-display: var(--ad-font-display);
+  --font-body: var(--ad-font-body);
+  --ease-out: var(--ad-ease);
+  --ease-pop: var(--ad-ease);      /* no overshoot: adidas motion is decisive, not bouncy */
+  --ease-wipe: var(--ad-ease);
+}
+
+
+/* -----------------------------------------------------------------------------
+   E. Required companion override. styles.css:97 hardcodes white text on
+      .btn.primary. With the dark theme's white action colour that would be
+      white-on-white, so this line must ship with section C.
+   -------------------------------------------------------------------------- */
+.btn.primary { color: var(--ad-on-action); }
