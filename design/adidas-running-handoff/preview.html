@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auction Re-skin Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Preview-only CSS. It uses the app's real class names where a component maps
+   1:1, so snippets can be lifted into styles.css / screen.css. Everything reads
+   from tokens.css. */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--ad-page); color: var(--ad-text); font: var(--ad-body-m); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 768px) { .wrap { padding: 0 32px; } }
+section.demo { padding: 48px 0; border-top: 1px solid var(--ad-divider); }
+.demo-title { font: var(--ad-headline-m); letter-spacing: var(--ad-headline-m-track); text-transform: uppercase; margin: 0 0 8px; }
+.demo-sub { color: var(--ad-text-2); margin: 0 0 24px; max-width: 760px; }
+.cap { font: var(--ad-label-caps); letter-spacing: var(--ad-label-caps-track); text-transform: uppercase; color: var(--ad-text-2); }
+.demo-label { display: block; margin: 32px 0 12px; }
+.line { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; align-items: start; }
+.sq { display: inline-block; width: 10px; height: 10px; flex: none; }
+
+/* ---------- hero ---------- */
+.hero { padding: 64px 0 56px; text-align: center; }
+.hero h1 { font: var(--ad-display-xl); font-size: clamp(30px, 6vw, 80px); letter-spacing: var(--ad-display-xl-track); text-transform: uppercase; margin: 0; }
+.hero p { font: var(--ad-body-l); color: var(--ad-text-2); margin: 16px auto 0; max-width: 640px; }
+.stage-banner { background: var(--ad-inverse); color: var(--ad-on-inverse); font: 700 14px/20px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; text-align: center; padding: 10px 16px; }
+
+/* ---------- topbar & tabs (styles.css:183-201) ---------- */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 64px; padding: 0 16px; background: var(--ad-page); border-bottom: 1px solid var(--ad-divider); position: sticky; top: 0; z-index: 40; }
+@media (min-width: 768px) { .topbar { padding: 0 32px; } }
+.topbar-left, .topbar-right { display: flex; align-items: center; gap: 12px; }
+.brand { font: 700 22px/1 var(--ad-font-heading); letter-spacing: 2px; text-transform: uppercase; color: var(--ad-text); text-decoration: none; white-space: nowrap; }
+nav.tabs { display: flex; align-self: stretch; overflow-x: auto; scrollbar-width: none; }
+nav.tabs .tab { display: flex; align-items: center; height: 100%; padding: 0 16px; background: none; border: 0; color: var(--ad-text); font: 400 16px/24px var(--ad-font-body); text-transform: uppercase; cursor: pointer; white-space: nowrap; transition: background-color var(--ad-dur) var(--ad-ease); }
+nav.tabs .tab:hover { background: var(--ad-hover); }
+nav.tabs .tab.active { font-weight: 700; box-shadow: inset 0 -2px 0 var(--ad-text); }
+@media (max-width: 900px) { .topbar nav.tabs { display: none; } }
+
+/* ---------- buttons (styles.css:87-103) ---------- */
+.btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--ad-size-button-l); padding: 0 16px; font: var(--ad-button); border-radius: 0; border: 1px solid var(--ad-border-strong); background: var(--ad-page); color: var(--ad-text); cursor: pointer; text-decoration: none; white-space: nowrap; transform-style: preserve-3d; transition: background-color var(--ad-dur) var(--ad-ease), border-color var(--ad-dur) var(--ad-ease), color var(--ad-dur), transform var(--ad-dur) var(--ad-ease); }
+.btn:hover:not(:disabled), .btn.is-hover { background: var(--ad-hover); border-color: var(--ad-grey-300); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:focus-visible, .btn.is-focus { outline: 1px dashed var(--ad-focus); outline-offset: 4px; }
+.btn:disabled { cursor: not-allowed; background: transparent; color: var(--ad-text-disabled); border-color: var(--ad-text-disabled); }
+.btn.primary, .btn.ok { border: 0; }
+.btn.primary { background: var(--ad-action); color: var(--ad-on-action); --outerbox: var(--ad-action); }
+.btn.primary:hover:not(:disabled), .btn.primary.is-hover { background: var(--ad-action-hover); --outerbox: var(--ad-grey-300); }
+.btn.primary:disabled { background: var(--ad-action-disabled); color: var(--ad-on-action-disabled); }
+/* the signature offset outline */
+.btn.primary::after, .btn.ok::after { content: ""; position: absolute; left: var(--ad-offset); top: var(--ad-offset); width: 100%; height: 100%; border: 1px solid var(--outerbox); transform: translateZ(-1px); pointer-events: none; transition: border-color var(--ad-dur) var(--ad-ease); }
+.btn:disabled::after { display: none; }
+.btn.primary.is-focus { outline: none; }
+.btn.primary.is-focus::before { content: ""; position: absolute; inset: 0; left: 2px; top: 2px; width: 100%; height: 100%; outline: 1px dashed var(--ad-focus); outline-offset: 6px; pointer-events: none; }
+.btn.ok { background: var(--ad-run-mint); color: #000; box-shadow: inset 0 0 0 1px #000; --outerbox: #000; }
+:root:not([data-theme='light']) .btn.ok { box-shadow: none; --outerbox: var(--ad-run-mint); }
+.btn.ok:hover:not(:disabled), .btn.ok.is-hover { background: #7cf47d; --outerbox: var(--ad-grey-300); }
+.btn.ok:disabled { background: var(--ad-action-disabled); color: var(--ad-on-action-disabled); box-shadow: none; }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover:not(:disabled), .btn.ghost.is-hover { background: var(--ad-hover); border-color: var(--ad-grey-300); }
+.btn.warn { background: transparent; border-color: var(--ad-red); color: var(--ad-red); }
+.btn.warn:hover:not(:disabled), .btn.warn.is-hover { background: var(--ad-error-surface); border-color: var(--ad-red); }
+.btn.warn:disabled { color: var(--ad-text-disabled); border-color: var(--ad-text-disabled); }
+.btn.big { min-height: var(--ad-size-button-xl); width: 100%; }
+.btn.sm { min-height: var(--ad-size-button-s); padding: 0 8px; font-size: 14px; }
+.btn.icon { width: 40px; min-height: 40px; padding: 0; }
+.btn .arrow { width: 32px; height: 32px; flex: none; margin-right: -6px; }
+.btn.big .arrow { margin-left: auto; }
+.btn.big { justify-content: flex-start; }
+
+/* ---------- links ---------- */
+a.link { color: var(--ad-text); font-weight: 700; text-decoration: underline; text-underline-position: from-font; }
+a.link:hover, a.link.is-hover { background: var(--ad-inverse); color: var(--ad-on-inverse); }
+
+/* ---------- tags & badges (styles.css:141-162) ---------- */
+.tier-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border: 0 solid; border-left-width: 4px; border-radius: 0; background: var(--ad-surface-alt); color: var(--ad-text) !important; font: 700 12px/20px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; }
+.badge { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 0; font: 700 12px/20px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+.badge.hot { background: var(--ad-red); color: #fff; }
+.badge.sleeper { background: var(--ad-inverse); color: var(--ad-on-inverse); }
+.badge.mint { background: var(--ad-run-mint); color: #000; }
+.stage-chip { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px; background: var(--ad-surface-alt); font: 700 12px/20px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; }
+.stage-chip.stage-live::before { content: ""; width: 8px; height: 8px; background: var(--ad-live); }
+.conn-dot { display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px; font: 700 12px/16px var(--ad-font-body); letter-spacing: 2px; text-transform: uppercase; }
+.conn-dot.on { color: var(--ad-live); }
+.conn-dot.on::before { content: ""; width: 8px; height: 8px; background: currentColor; }
+.conn-dot.off { background: var(--ad-red); color: #fff; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.status { font: 700 12px/16px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; }
+.status-available { color: var(--ad-text-2); } .status-sold { color: var(--ad-success-text); } .status-unsold { color: var(--ad-error-text); }
+
+/* ---------- chips: filter pills reuse .tab inside a card (TeamPage.tsx:475) ---------- */
+.card .tab { display: inline-flex; align-items: center; min-height: var(--ad-size-chip); padding: 4px 8px; border: 1px solid var(--ad-border-input); border-radius: 0; background: var(--ad-page); color: var(--ad-text); font: 400 16px/24px var(--ad-font-body); cursor: pointer; transition: all var(--ad-dur-fast) ease-in-out; }
+.card .tab:hover, .card .tab.is-hover { background: var(--ad-hover); border-color: var(--ad-text); }
+.card .tab.active { background: var(--ad-inverse); border-color: var(--ad-inverse); color: var(--ad-on-inverse); }
+
+/* ---------- cards (styles.css:80-86) ---------- */
+.card { background: var(--ad-surface); border: 1px solid var(--ad-divider); border-radius: 0; padding: var(--ad-space-m); margin-bottom: 16px; }
+.card > h2, .card > h3, .card-title { font: var(--ad-headline-s); letter-spacing: var(--ad-headline-s-track); text-transform: uppercase; margin: 0 0 16px; }
+.lot-card.you-lead { outline: 2px solid var(--ad-green); outline-offset: -2px; }
+
+/* ---------- forms (styles.css:106-116) ---------- */
+label.field { display: flex; flex-direction: column; gap: 8px; font: 700 14px/20px var(--ad-font-body); color: var(--ad-text); }
+.input { height: 48px; padding: 12px 16px; background: var(--ad-page); color: var(--ad-text); border: 1px solid var(--ad-border-input); border-radius: 0; font: var(--ad-body-m); min-width: 0; transition: border-color var(--ad-dur) var(--ad-ease); }
+.input:hover { border-color: var(--ad-text); }
+.input:focus, .input.is-focus { outline: none; border-color: var(--ad-border-input); border-bottom: 2px solid var(--ad-text); padding-bottom: 11px; }
+.input.error { border-bottom: 2px solid var(--ad-red); padding-bottom: 11px; }
+.hint { font: var(--ad-body-s); color: var(--ad-text-2); }
+.hint.error { color: var(--ad-error-text); }
+select.input { appearance: none; padding-right: 44px; background-repeat: no-repeat; background-position: right 16px center; background-size: 14px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M1 4.5l6 6 6-6' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3C/svg%3E"); }
+:root:not([data-theme='light']) select.input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M1 4.5l6 6 6-6' fill='none' stroke='%23fff' stroke-width='1.3'/%3E%3C/svg%3E"); }
+.code-input { text-align: center; font: 700 28px/1 var(--ad-font-heading); letter-spacing: .35em; text-transform: uppercase; }
+label.check { display: flex; align-items: center; gap: 8px; font: var(--ad-body-m); cursor: pointer; }
+label.check input { appearance: none; width: 24px; height: 24px; margin: 0; border: 1px solid var(--ad-border-input); border-radius: 0; background: var(--ad-page); display: grid; place-items: center; cursor: pointer; transition: border-color var(--ad-dur) var(--ad-ease); }
+label.check input:hover { border-color: var(--ad-text); outline: 4px solid var(--ad-hover); }
+label.check input:checked { background: var(--ad-inverse); border-color: var(--ad-inverse); }
+label.check input:checked::after { content: ""; width: 12px; height: 6px; border: solid var(--ad-on-inverse); border-width: 0 0 2px 2px; transform: translateY(-2px) rotate(-45deg); }
+label.check:has(input:checked) { font-weight: 700; }
+
+/* ---------- messages (styles.css:165-176, 208-209, 372-375) ---------- */
+.notice { display: flex; gap: 8px; padding: 16px; font: var(--ad-body-s); color: var(--ad-text); border-radius: 0; margin: 0 0 8px; }
+.notice.info { background: var(--ad-surface-alt); }
+.notice.ok { background: var(--ad-success-surface); border-left: 4px solid var(--ad-green); }
+.notice.error { background: var(--ad-error-surface); border-left: 4px solid var(--ad-red); }
+.warning { background: var(--ad-surface-alt); border-left: 4px solid var(--ad-orange); padding: 12px 16px; font: var(--ad-body-s); color: var(--ad-text); margin: 0 0 8px; }
+.toast { padding: 16px; font: 700 16px/24px var(--ad-font-body); background: var(--ad-inverse); color: var(--ad-on-inverse); border-radius: 0; max-width: 480px; margin: 0 0 8px; }
+.toast.ok { border-left: 4px solid var(--ad-run-mint); }
+.toast.error { background: var(--ad-red); color: #fff; }
+.offline-banner { background: var(--ad-red); color: #fff; font: 700 14px/20px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; text-align: center; padding: 10px 16px; animation: pulse 1.6s infinite; }
+
+/* ---------- modal (styles.css:178-180) ---------- */
+.modal-stage { position: relative; background: var(--ad-backdrop); padding: 40px 16px; display: grid; place-items: center; }
+.modal { background: var(--ad-surface); border-radius: 0; padding: 24px; width: min(600px, 100%); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-head h2 { font: var(--ad-headline-s); letter-spacing: var(--ad-headline-s-track); text-transform: uppercase; margin: 0; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin: 0 0 24px; }
+.modal-foot { display: flex; justify-content: space-between; gap: 12px; }
+
+/* ---------- console: stage bar (styles.css:224-232) ---------- */
+.stagebar { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; }
+.tier-chip { display: flex; flex-direction: column; gap: 2px; min-width: 128px; padding: 8px 12px; background: var(--ad-surface-alt); border: 0 solid var(--ad-divider); border-left-width: 4px; border-radius: 0; font: 700 14px/20px var(--ad-font-body); }
+.tier-chip .muted { font: 400 12px/16px var(--ad-font-body); color: var(--ad-text-2); }
+.tier-chip > span[style] { color: var(--ad-text) !important; }
+.tier-chip.active { background: var(--ad-inverse); color: var(--ad-on-inverse); }
+.tier-chip.active > span[style] { color: var(--ad-on-inverse) !important; }
+.tier-chip.active .muted { color: var(--ad-on-inverse); opacity: .7; }
+.tier-chip.timeout-chip { border-left-color: var(--ad-orange); }
+
+/* ---------- console: lot card (styles.css:243-252) ---------- */
+.console-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .console-grid { grid-template-columns: 1fr; } }
+.lot-head { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.lot-id { display: flex; gap: 16px; align-items: flex-start; min-width: 0; }
+.tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.player-photo { display: inline-flex; align-items: center; justify-content: center; flex: none; background: var(--ad-surface-alt); color: var(--ad-text-2); font-family: var(--ad-font-display); border-radius: 0; user-select: none; }
+.player-photo.sm { width: 34px; height: 34px; font-size: 14px; }
+.player-photo.md { width: 96px; height: 96px; font-size: 34px; }
+.lot-name { font: var(--ad-headline-m); letter-spacing: var(--ad-headline-m-track); text-transform: uppercase; margin: 8px 0 4px; text-wrap: balance; overflow-wrap: anywhere; }
+.lot-meta { font: var(--ad-body-s); color: var(--ad-text-2); }
+.lot-meta b { font: var(--ad-price); color: var(--ad-text); }
+.lot-bid-box { text-align: right; min-width: 180px; margin-left: auto; }
+/* ticking numbers use Barlow Condensed: Anton has no tabular figures, so a countdown in Anton jitters */
+.hammer-timer { font: 800 30px/1 var(--ad-font-heading); letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.hammer-timer.urgent { color: var(--ad-red); animation: pulse .6s infinite; }
+.lot-bid-amount { font: 400 44px/1.05 var(--ad-font-display); letter-spacing: 1px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+.lot-bid-team { display: inline-flex; align-items: center; gap: 8px; font: 700 16px/24px var(--ad-font-body); }
+.notes { font: var(--ad-body-s); color: var(--ad-text-2); border-left: 2px solid var(--ad-divider); padding-left: 12px; margin: 16px 0 0; }
+
+/* stats (styles.css:256-270) */
+.stat-groups { display: flex; flex-direction: column; gap: 4px; margin-top: 24px; }
+.stat-group { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 8px; }
+.stat-group-title { font: 700 12px/16px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; color: var(--ad-text-2); }
+.stats-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.stat-cell { background: var(--ad-surface-alt); padding: 8px 4px; text-align: center; min-width: 0; }
+.stat-value { font: 700 20px/24px var(--ad-font-heading); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-rank { display: inline-block; margin-left: 4px; padding: 0 4px; background: var(--ad-inverse); color: var(--ad-on-inverse); font: 700 10px/14px var(--ad-font-body); vertical-align: 3px; }
+.stat-label { font: 400 11px/14px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; color: var(--ad-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 520px) { .stat-group { grid-template-columns: 1fr; gap: 4px; } }
+
+/* bid history (styles.css:272-276) */
+.bid-row { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px; border-bottom: 1px solid var(--ad-divider); font: var(--ad-body-s); }
+.bid-row.leading { background: var(--ad-inverse); color: var(--ad-on-inverse); border-bottom-color: var(--ad-inverse); font-weight: 700; }
+.bid-amt { margin-left: auto; font: 700 16px/24px var(--ad-font-body); font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 0; flex: none; }
+
+/* bid panel (styles.css:278-282): team buttons become size-grid tiles */
+.bid-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 12px; }
+.btn.bid-btn { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; min-height: 64px; padding: 8px 12px; background: var(--ad-surface-alt); border: 0 solid; border-left-width: 6px; color: var(--ad-text) !important; }
+.btn.bid-btn:hover:not(:disabled) { background: var(--ad-hover-alt); }
+.btn.bid-btn:disabled { background: transparent; color: var(--ad-text-disabled) !important; }
+.bid-btn-name { font: 400 14px/20px var(--ad-font-body); }
+.bid-btn-amt { font: 700 22px/26px var(--ad-font-heading); font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.custom-bid { display: grid; grid-template-columns: 1.3fr 1fr auto; gap: 8px; }
+.hammer-row { display: flex; gap: 16px; margin-top: 16px; padding-right: 4px; }
+.hammer-row .grow { flex: 1; }
+.ghost-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 16px; }
+
+/* tables (styles.css:127-138) */
+.table { width: 100%; border-collapse: collapse; font: var(--ad-body-s); }
+.table th { text-align: left; font: 700 12px/16px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; color: var(--ad-text-2); padding: 12px 8px; border-bottom: 2px solid var(--ad-text); }
+.table td { padding: 12px 8px; border-bottom: 1px solid var(--ad-divider); vertical-align: middle; }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.row-you td { background: var(--ad-shade); }
+.row-dim { opacity: .45; }
+.team-cell { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+
+/* ---------- team page: phone frame ---------- */
+.phone { width: 375px; max-width: 100%; border: 1px solid var(--ad-divider); background: var(--ad-page); }
+.phone .topbar { position: static; height: 56px; padding: 0 12px; }
+.phone .brand { font-size: 18px; }
+.phone-tabs { display: flex; border-bottom: 1px solid var(--ad-divider); overflow-x: auto; }
+.phone-tabs .tab { flex: none; height: 48px; padding: 0 14px; background: none; border: 0; color: var(--ad-text); font: 400 14px/20px var(--ad-font-body); text-transform: uppercase; }
+.phone-tabs .tab.active { font-weight: 700; box-shadow: inset 0 -2px 0 var(--ad-text); }
+.money-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--ad-divider); border-bottom: 1px solid var(--ad-divider); }
+.money-cell { background: var(--ad-page); text-align: center; padding: 12px 4px; }
+.money-cell.accent { box-shadow: inset 0 -4px 0 var(--team-color); }
+.money-value { font: 400 21px/1.1 var(--ad-font-display); letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.money-value .muted { color: var(--ad-text-2); }
+.money-label { font: 400 10px/14px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; color: var(--ad-text-2); margin-top: 2px; }
+.phone-body { padding: 12px; }
+.phone .card { padding: 16px; }
+.phone .lot-name { font: var(--ad-headline-s); letter-spacing: var(--ad-headline-s-track); font-size: 26px; line-height: 28px; }
+.phone .lot-bid-amount { font-size: 34px; }
+.bid-big { width: 100%; min-height: var(--ad-size-buy); font: 700 18px/24px var(--ad-font-body); margin-top: 16px; }
+.hold-bid { position: relative; overflow: hidden; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.hold-bid::after { display: none; } /* no offset outline: overflow hidden would clip it */
+.hold-bid .hold-fill { position: absolute; inset: 0; pointer-events: none; background: color-mix(in srgb, var(--ad-run-mint) 45%, transparent); transform: scaleX(0); transform-origin: left center; }
+.hold-bid.holding .hold-fill { transform: scaleX(1); transition: transform var(--hold-ms, 600ms) linear; }
+.hold-bid.demo-half .hold-fill { transform: scaleX(.55); }
+.hold-bid .hold-label { position: relative; z-index: 1; }
+.btn.primary.bid-big.leading { background: var(--ad-run-mint); color: #000; }
+
+/* ---------- projector (screen.css) — scaled mock using container units ---------- */
+.screen-frame { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--ad-divider); overflow: hidden; container-type: inline-size; position: relative; }
+.screen-frame .scr-page { display: flex; flex-direction: column; height: 100%; background: var(--bg-0); color: var(--hi); font-family: var(--font-body); }
+.scr-head { display: flex; align-items: center; justify-content: space-between; gap: 2cqi; height: 5.6cqi; padding: 0 2.2cqi; background: var(--head-1); border-bottom: 1px solid var(--line); flex: none; }
+.scr-brand { display: flex; align-items: center; gap: 1cqi; font: 400 2cqi/1 var(--font-display); letter-spacing: .1cqi; text-transform: uppercase; }
+.scr-brand-bar { width: .5cqi; height: 2.4cqi; background: var(--ad-run-mint); }
+:root[data-theme='light'] .scr-brand-bar { background: #000; }
+.scr-stagechip { font: 700 1.2cqi/1 var(--font-body); letter-spacing: .24em; text-transform: uppercase; padding: .6cqi 1.4cqi; border: 1px solid var(--hi); border-left: .35cqi solid var(--tier); }
+.scr-head-right { display: flex; align-items: center; gap: 1.2cqi; }
+.scr-icon { width: 3.4cqi; height: 3.4cqi; border: 1px solid var(--line); display: grid; place-items: center; font-size: 1.5cqi; }
+.scr-live { display: flex; align-items: center; gap: .9cqi; font: 700 1.25cqi/1 var(--font-body); letter-spacing: .3em; text-transform: uppercase; color: var(--live); }
+.scr-live-dot { width: 1cqi; height: 1cqi; background: var(--live); }
+.scr-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 4cqi; align-items: center; padding: 2cqi 3cqi; min-height: 0; }
+.scr-lotline { font: 700 1.05cqi/1.4 var(--font-body); letter-spacing: .16em; text-transform: uppercase; color: var(--mid); }
+.scr-lotline span:first-child { color: var(--hi); }
+.scr-lotline span + span::before { content: '·'; margin: 0 .75em; }
+.scr-id-head { display: flex; align-items: center; gap: 1.8cqi; margin: 1.2cqi 0 1.4cqi; }
+.scr-photo { width: 14cqi; height: 14cqi; flex: none; background: var(--bg-2); display: grid; place-items: center; font: 400 5.5cqi/1 var(--font-display); color: var(--mid); box-shadow: inset .4cqi 0 0 var(--tier); }
+.scr-name { font: 400 5.6cqi/.95 var(--font-display); letter-spacing: .02em; text-transform: uppercase; margin: 0 0 1cqi; }
+.scr-meta { display: flex; flex-wrap: wrap; gap: .6cqi; }
+.scr-chip { font: 700 1.05cqi/1 var(--font-body); letter-spacing: .12em; text-transform: uppercase; padding: .5cqi .9cqi; white-space: nowrap; }
+.scr-chip.tier { background: var(--bg-2); border-left: .35cqi solid var(--tier); }
+.scr-chip.role { background: var(--bg-2); }
+.scr-chip.base { border: 1px solid var(--hi); }
+.scr-chip.hot { background: var(--ad-red); color: #fff; }
+.scr-statgroups { display: flex; flex-direction: column; gap: .5cqi; }
+.scr-sg { display: grid; grid-template-columns: 6cqi minmax(0, 1fr); gap: .6cqi; align-items: stretch; }
+.scr-sg-title { display: flex; align-items: center; font: 700 1.25cqi/1 var(--ad-font-heading); letter-spacing: .08em; text-transform: uppercase; color: var(--mid); border-right: 2px solid var(--line); }
+.scr-sg-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .45cqi; }
+.scr-stat { background: var(--panel); border-top: 2px solid var(--tier); padding: .55cqi .3cqi .45cqi; text-align: center; min-width: 0; }
+.scr-stat-v { font: 700 2.1cqi/1.1 var(--ad-font-heading); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scr-stat-l { font: 600 .8cqi/1.2 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scr-theatre-top { display: flex; justify-content: space-between; gap: 1.5cqi; align-items: flex-start; }
+.scr-eyebrow { font: 700 1.2cqi/1 var(--font-body); letter-spacing: .26em; text-transform: uppercase; color: var(--mid); margin-bottom: .5cqi; }
+.scr-amount { font: 400 10.5cqi/1 var(--font-display); letter-spacing: .01em; color: var(--gold); font-variant-numeric: tabular-nums; }
+.scr-ring { position: relative; width: 10cqi; height: 10cqi; flex: none; }
+.scr-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.scr-ring .track { fill: none; stroke: var(--line); stroke-width: 10; }
+.scr-ring .arc { fill: none; stroke: var(--ad-ring); stroke-width: 10; stroke-linecap: butt; }
+.scr-ring-num { position: absolute; inset: 0; display: grid; place-items: center; font: 800 4.4cqi/1 var(--ad-font-heading); font-variant-numeric: tabular-nums; }
+.scr-plate { display: inline-block; margin-top: 1.2cqi; padding: .8cqi 1.6cqi; background: var(--lead); color: #fff; font: 400 2.4cqi/1 var(--font-display); letter-spacing: .05em; text-transform: uppercase; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scr-plate.dark-ink { color: #000; }
+.scr-nextmin { margin-top: 1.2cqi; font: 600 1.3cqi/1 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--mid); }
+.scr-nextmin b { color: var(--hi); font-weight: 700; font-variant-numeric: tabular-nums; }
+.scr-feed { margin-top: 1.6cqi; }
+.scr-bid-row { display: flex; align-items: center; gap: 1cqi; height: 3.4cqi; padding-right: 1cqi; background: var(--panel); border-bottom: 1px solid var(--line); }
+.scr-bid-row .bar { width: .45cqi; align-self: stretch; background: var(--team); }
+.scr-bid-row .team { font: 700 1.4cqi/1 var(--font-body); letter-spacing: .04em; text-transform: uppercase; }
+.scr-bid-row .amt { margin-left: auto; font: 700 1.7cqi/1 var(--ad-font-heading); font-variant-numeric: tabular-nums; color: var(--gold); }
+.scr-bid-row:nth-child(2) { opacity: .8; } .scr-bid-row:nth-child(3) { opacity: .65; }
+.scr-foot { display: grid; grid-template-columns: repeat(2, 1fr); border-top: 1px solid var(--line); flex: none; }
+.scr-cell { display: flex; align-items: center; gap: 1.2cqi; padding: .9cqi 1.6cqi 1.2cqi; border-left: .5cqi solid var(--team); position: relative; }
+.scr-cell + .scr-cell::before { content: ''; position: absolute; left: -1px; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.scr-cell-main { flex: 1; min-width: 0; }
+.scr-cell-name { font: 700 1.5cqi/1.1 var(--ad-font-heading); letter-spacing: .05em; text-transform: uppercase; }
+.scr-purse { font: 400 2.5cqi/1.1 var(--font-display); letter-spacing: .04em; font-variant-numeric: tabular-nums; color: var(--gold); }
+.scr-squad, .scr-cell-side .lbl { font: 400 .95cqi/1.3 var(--font-body); letter-spacing: .1em; text-transform: uppercase; color: var(--mid); }
+.scr-cell-side { text-align: right; }
+.scr-cell-side .val { font: 700 2cqi/1.15 var(--ad-font-heading); font-variant-numeric: tabular-nums; }
+.scr-cell.leading { background: var(--hi); color: var(--bg-0); }
+.scr-cell.leading .scr-purse, .scr-cell.leading .scr-squad, .scr-cell.leading .lbl { color: var(--bg-0); }
+.scr-fuel { position: absolute; left: 0; right: 0; bottom: 0; height: .35cqi; background: var(--fuel-track); }
+.scr-fuel i { display: block; height: 100%; background: var(--team); transform-origin: left; }
+
+/* idle headline: the adidas inline highlight box */
+.idle-frame { aspect-ratio: auto; }
+.idle-strip { display: flex; align-items: center; justify-content: center; padding: 5cqi 3cqi; background: var(--bg-0); color: var(--hi); }
+.scr-idle-headline { font: 400 4cqi/1.15 var(--font-display); letter-spacing: .03em; text-transform: uppercase; text-align: center; }
+.scr-idle-headline .tier { background: var(--hi); color: var(--bg-0); padding: 0 .15em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+
+/* SOLD takeover (screen.css:860-1048), static frame */
+.sold-frame { position: relative; display: grid; place-items: center; overflow: hidden; }
+.sold-frame .panel { position: absolute; top: 0; bottom: 0; width: 50%; background: var(--fc); }
+.sold-frame .panel.a { left: 0; } .sold-frame .panel.b { right: 0; filter: brightness(.92); }
+.sold-frame .scrim { position: absolute; inset: 0; background: rgba(0, 0, 0, .22); }
+.sold-stack { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 1.2cqi; }
+.scr-stamp { background: var(--ad-run-mint); color: #000; padding: 0 .18em; font: italic 800 13cqi/1 var(--ad-font-heading); letter-spacing: .02em; text-transform: uppercase; transform: rotate(-4deg); }
+.scr-stamp.unsold { background: transparent; color: #fff; border: .45cqi solid var(--ad-red); font: 400 9cqi/1 var(--ad-font-display); transform: rotate(-4deg); padding: 0 .3em; }
+.sold-photo { width: 12cqi; height: 12cqi; display: grid; place-items: center; background: #1e1e1e; border: .35cqi solid #fff; font: 400 4.5cqi/1 var(--ad-font-display); color: #929396; }
+.sold-name { font: 400 4.2cqi/1 var(--ad-font-display); letter-spacing: .03em; text-transform: uppercase; color: #fff; }
+.scr-payoff-team { background: #000; color: #fff; padding: .7cqi 2.2cqi; font: 700 1.8cqi/1 var(--ad-font-body); letter-spacing: .16em; text-transform: uppercase; }
+.scr-payoff-price { font: 400 6.5cqi/1 var(--ad-font-display); color: #fff; font-variant-numeric: tabular-nums; }
+.scr-payoff-price .pts { font: 400 1.6cqi/1 var(--ad-font-body); letter-spacing: .2em; margin-left: 1cqi; }
+
+/* foundations */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 4px; }
+.swatch { border: 1px solid var(--ad-divider); }
+.swatch i { display: block; height: 72px; }
+.swatch div { padding: 8px; font: var(--ad-body-xs); }
+.swatch b { display: block; font: 700 12px/16px var(--ad-font-body); }
+.type-row { display: grid; grid-template-columns: 168px 1fr; gap: 24px; align-items: baseline; padding: 16px 0; border-bottom: 1px solid var(--ad-divider); }
+@media (max-width: 640px) { .type-row { grid-template-columns: 1fr; gap: 4px; } }
+.space-row { display: flex; align-items: center; gap: 16px; margin: 4px 0; font: var(--ad-body-s); }
+.space-row i { display: block; height: 12px; background: var(--ad-inverse); }
+.footer-note { padding-top: 48px; padding-bottom: 80px; color: var(--ad-text-2); font: var(--ad-body-s); }
+</style>
+</head>
+<body>
+
+<!-- Admin topbar (styles.css .topbar) -->
+<header class="topbar">
+  <div class="topbar-left">
+    <a class="brand" href="#">DTC Season 3</a>
+    <span class="stage-chip stage-live">Live</span>
+  </div>
+  <nav class="tabs" aria-label="Admin sections">
+    <button class="tab active">🔨 Auction</button>
+    <button class="tab">Players</button>
+    <button class="tab">Teams</button>
+    <button class="tab">Settings</button>
+    <button class="tab">Log</button>
+  </nav>
+  <div class="topbar-right">
+    <button class="btn ghost sm" id="themeBtn" aria-label="Toggle theme">☀ <span id="themeLbl">Light</span></button>
+    <span class="conn-dot on">Live</span>
+    <button class="btn ghost sm">Sign out</button>
+  </div>
+</header>
+<div class="stage-banner">Set 2 · Player 9 of 24 · Timeout after player 16</div>
+
+<div class="wrap">
+  <div class="hero">
+    <span class="cap">Re-skin preview</span>
+    <h1>Track every bid.<br>Push your purse.</h1>
+    <p>Your auction components in the adidas Running language. Toggle light and dark in the top bar.</p>
+  </div>
+</div>
+
+<!-- ================= FOUNDATIONS ================= -->
+<section class="demo"><div class="wrap">
+  <h2 class="demo-title">Colour</h2>
+  <p class="demo-sub">Black and white do the work. Mint marks a win, red marks urgency, green marks live. Team and tier colours are identity stripes only.</p>
+  <div class="swatches">
+    <div class="swatch"><i style="background:#000"></i><div><b>Black</b>#000000 · action, text</div></div>
+    <div class="swatch"><i style="background:#fff"></i><div><b>White</b>#ffffff · page</div></div>
+    <div class="swatch"><i style="background:#eceff1"></i><div><b>Grey 100</b>#eceff1 · tiles</div></div>
+    <div class="swatch"><i style="background:#d9dbdd"></i><div><b>Grey 200</b>#d9dbdd · dividers</div></div>
+    <div class="swatch"><i style="background:#929396"></i><div><b>Grey 300</b>#929396 · borders</div></div>
+    <div class="swatch"><i style="background:#767677"></i><div><b>Grey 500</b>#767677 · secondary</div></div>
+    <div class="swatch"><i style="background:#1e1e1e"></i><div><b>Grey 900</b>#1e1e1e · dark hover</div></div>
+    <div class="swatch"><i style="background:#8dfe8e"></i><div><b>Run mint</b>#8dfe8e · win</div></div>
+    <div class="swatch"><i style="background:#51ac6f"></i><div><b>Run green</b>#51ac6f · ring</div></div>
+    <div class="swatch"><i style="background:#e32b2b"></i><div><b>Red</b>#e32b2b · urgent</div></div>
+    <div class="swatch"><i style="background:#00aa55"></i><div><b>Green</b>#00aa55 · live</div></div>
+    <div class="swatch"><i style="background:#408267"></i><div><b>Club green</b>#408267 · ok text</div></div>
+    <div class="swatch"><i style="background:#d98916"></i><div><b>Orange</b>#d98916 · warning</div></div>
+    <div class="swatch"><i style="background:#007bc6"></i><div><b>Blue</b>#007bc6 · info</div></div>
+  </div>
+
+  <span class="cap demo-label">Type</span>
+  <div class="type-row"><span class="cap">Display XL · Anton</span><span style="font: var(--ad-display-xl); letter-spacing: var(--ad-display-xl-track); text-transform: uppercase; font-size: clamp(30px, 5vw, 64px); line-height: 1;">Sold · 24,200</span></div>
+  <div class="type-row"><span class="cap">Headline L · Barlow Cond.</span><span style="font: var(--ad-headline-l); letter-spacing: var(--ad-headline-l-track); text-transform: uppercase;">Player pool</span></div>
+  <div class="type-row"><span class="cap">Headline M</span><span style="font: var(--ad-headline-m); letter-spacing: var(--ad-headline-m-track); text-transform: uppercase;">Live purse tracker</span></div>
+  <div class="type-row"><span class="cap">Headline S</span><span style="font: var(--ad-headline-s); letter-spacing: var(--ad-headline-s-track); text-transform: uppercase;">Record a bid</span></div>
+  <div class="type-row"><span class="cap">Eyebrow · Barlow 700</span><span style="font: var(--ad-eyebrow); letter-spacing: var(--ad-eyebrow-track); text-transform: uppercase;">Current bid</span></div>
+  <div class="type-row"><span class="cap">Body M · Barlow</span><span style="font: var(--ad-body-m);">Captains hold the button to bid. Releasing early cancels, so nobody bids by accident.</span></div>
+  <div class="type-row"><span class="cap">Body S</span><span style="font: var(--ad-body-s); color: var(--ad-text-2);">Men Performance · 3 colours · New</span></div>
+  <div class="type-row"><span class="cap">Label caps</span><span class="cap" style="color: var(--ad-text);">Remaining · Spent · Max next bid</span></div>
+
+  <span class="cap demo-label">Spacing (adidas scale)</span>
+  <div class="space-row"><i style="width:4px"></i>4 · 2xs</div>
+  <div class="space-row"><i style="width:8px"></i>8 · xs</div>
+  <div class="space-row"><i style="width:16px"></i>16 · s</div>
+  <div class="space-row"><i style="width:24px"></i>24 · m</div>
+  <div class="space-row"><i style="width:32px"></i>32 · l</div>
+  <div class="space-row"><i style="width:48px"></i>48 · 2xl</div>
+  <div class="space-row"><i style="width:64px"></i>64 · 3xl</div>
+</div></section>
+
+<!-- ================= COMPONENTS ================= -->
+<section class="demo"><div class="wrap">
+  <h2 class="demo-title">Buttons</h2>
+  <p class="demo-sub">Square, bold, sentence case. The primary CTA carries the 1px offset outline. It turns grey on hover and disappears when disabled.</p>
+  <div class="line">
+    <button class="btn primary">Start the auction <svg class="arrow" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 16h23m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg></button>
+    <button class="btn primary is-hover">Hover</button>
+    <button class="btn primary is-focus">Focus</button>
+    <button class="btn primary" disabled>Disabled</button>
+  </div>
+  <div class="line" style="margin-top:24px">
+    <button class="btn">Secondary</button>
+    <button class="btn is-hover">Hover</button>
+    <button class="btn ghost">Ghost</button>
+    <button class="btn ghost is-hover">Ghost hover</button>
+    <button class="btn warn">Unsold</button>
+    <button class="btn ok">🔨 Sold · 2,400</button>
+    <button class="btn sm">Small</button>
+    <button class="btn ghost icon" aria-label="Close">✕</button>
+  </div>
+  <div class="line" style="margin-top:24px">
+    <a class="link" href="#">Show the rules</a>
+    <a class="link is-hover" href="#">Link hover inverts</a>
+  </div>
+
+  <span class="cap demo-label">Tags · badges · status</span>
+  <div class="line">
+    <span class="tier-badge" style="color:#67e8f9;border-color:#67e8f9">Diamond</span>
+    <span class="tier-badge" style="color:#fbbf24;border-color:#fbbf24">Gold</span>
+    <span class="tier-badge" style="color:#34d399;border-color:#34d399">Emerald</span>
+    <span class="tier-badge" style="color:#c4b5fd;border-color:#c4b5fd">New Players</span>
+    <span class="badge hot">Hot #2</span>
+    <span class="badge sleeper">Sleeper</span>
+    <span class="badge mint">Top buy</span>
+    <span class="stage-chip stage-live">Live</span>
+    <span class="conn-dot on">Live</span>
+    <span class="conn-dot off">Offline</span>
+    <span class="status status-available">Available</span>
+    <span class="status status-sold">Sold</span>
+    <span class="status status-unsold">Unsold</span>
+  </div>
+
+  <span class="cap demo-label">Chips (Pool filters) · inputs</span>
+  <div class="card">
+    <div class="line" style="gap:8px">
+      <button class="tab active">Still to buy</button>
+      <button class="tab">🔥 Hot list</button>
+      <button class="tab is-hover">⭐ Watchlist</button>
+      <button class="tab">Everyone</button>
+    </div>
+    <div class="form-grid" style="margin-top:24px">
+      <label class="field">Team code<input class="input code-input" value="PRX7"></label>
+      <label class="field">Search players<input class="input is-focus" placeholder="Name or role" value="Bora"></label>
+      <label class="field">Tier<select class="input"><option>All tiers</option><option>Diamond</option></select></label>
+      <label class="field">Target price<input class="input error" value="99999"><span class="hint error">Above your max bid (24,200)</span></label>
+    </div>
+    <label class="check"><input type="checkbox" checked> Show tiers on the big screen</label>
+  </div>
+
+  <span class="cap demo-label">Messages</span>
+  <div class="grid-2">
+    <div>
+      <div class="notice info">Photo links copied. Paste them into the group chat.</div>
+      <div class="notice ok">Photo uploaded. It shows on the big screen from the next lot.</div>
+      <div class="notice error">That team code doesn't exist. Check the QR card.</div>
+      <div class="warning">⚠ Underdogs can't complete a squad at current prices.</div>
+    </div>
+    <div>
+      <div class="toast ok">Auction is live!</div>
+      <div class="toast error">Bid rejected: someone bid first.</div>
+      <div class="offline-banner">Offline — reconnecting…</div>
+    </div>
+  </div>
+
+  <span class="cap demo-label">Modal</span>
+  <div class="modal-stage">
+    <div class="modal" role="dialog" aria-label="Edit player">
+      <div class="modal-head"><h2>Edit player</h2><button class="btn ghost icon" aria-label="Close">✕</button></div>
+      <div class="form-grid">
+        <label class="field">Name<input class="input" value="Ishaan Bora"></label>
+        <label class="field">Role<input class="input" value="All-rounder"></label>
+        <label class="field">Base price<input class="input" value="1,000"></label>
+      </div>
+      <div class="modal-foot"><button class="btn warn">Delete</button><button class="btn primary">Save</button></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= ADMIN CONSOLE ================= -->
+<section class="demo"><div class="wrap">
+  <h2 class="demo-title">Admin · auction console</h2>
+  <p class="demo-sub">The lot card works like an adidas buy box. Team bid buttons are size-grid tiles with a team stripe. SOLD is the mint CTA; UNSOLD is the red outline.</p>
+
+  <div class="stagebar">
+    <div class="tier-chip" style="border-color:#67e8f9"><span style="color:#67e8f9">Diamond</span><span class="muted">4/4 sold</span></div>
+    <div class="tier-chip active" style="border-color:#fbbf24"><span style="color:#fbbf24">Gold</span><span class="muted">3/8 sold</span></div>
+    <div class="tier-chip" style="border-color:#34d399"><span style="color:#34d399">Emerald</span><span class="muted">0/12 sold</span></div>
+    <div class="tier-chip"><span>Total</span><span class="muted">7/24 sold</span></div>
+    <div class="tier-chip timeout-chip"><span>Set 2</span><span class="muted">1/8 auctioned</span></div>
+  </div>
+
+  <div class="console-grid">
+    <div>
+      <div class="card lot-card">
+        <div class="lot-head">
+          <div class="lot-id">
+            <span class="player-photo md" role="img" aria-label="Ishaan Bora">IB</span>
+            <div>
+              <div class="tags"><span class="tier-badge" style="color:#fbbf24;border-color:#fbbf24">Gold</span><span class="badge hot">Hot #2</span></div>
+              <h1 class="lot-name">Ishaan Bora</h1>
+              <div class="lot-meta">All-rounder · base <b>1,000</b> pts</div>
+            </div>
+          </div>
+          <div class="lot-bid-box">
+            <div class="hammer-timer urgent">3s</div>
+            <div class="cap" style="margin-top:12px">Current bid</div>
+            <div class="lot-bid-amount">2,400</div>
+            <div class="lot-bid-team"><span class="sq" style="background:#f43f5e"></span>Power Rangers lead</div>
+          </div>
+        </div>
+        <div class="stat-groups">
+          <div class="stat-group"><div class="stat-group-title">MVP</div><div class="stats-grid">
+            <div class="stat-cell"><div class="stat-value">412<span class="stat-rank">#3</span></div><div class="stat-label">Points</div></div>
+            <div class="stat-cell"><div class="stat-value">9</div><div class="stat-label">Matches</div></div>
+            <div class="stat-cell"><div class="stat-value">3</div><div class="stat-label">POTM</div></div>
+            <div class="stat-cell"><div class="stat-value">45.8</div><div class="stat-label">Per match</div></div>
+            <div class="stat-cell"><div class="stat-value">2</div><div class="stat-label">Seasons</div></div>
+          </div></div>
+          <div class="stat-group"><div class="stat-group-title">Batting</div><div class="stats-grid">
+            <div class="stat-cell"><div class="stat-value">286</div><div class="stat-label">Runs</div></div>
+            <div class="stat-cell"><div class="stat-value">35.7</div><div class="stat-label">Average</div></div>
+            <div class="stat-cell"><div class="stat-value">142.3</div><div class="stat-label">Strike rate</div></div>
+            <div class="stat-cell"><div class="stat-value">24</div><div class="stat-label">Fours</div></div>
+            <div class="stat-cell"><div class="stat-value">11</div><div class="stat-label">Sixes</div></div>
+          </div></div>
+          <div class="stat-group"><div class="stat-group-title">Bowling</div><div class="stats-grid">
+            <div class="stat-cell"><div class="stat-value">12</div><div class="stat-label">Wickets</div></div>
+            <div class="stat-cell"><div class="stat-value">6.8</div><div class="stat-label">Economy</div></div>
+            <div class="stat-cell"><div class="stat-value">18.4</div><div class="stat-label">Average</div></div>
+            <div class="stat-cell"><div class="stat-value">3/14</div><div class="stat-label">Best</div></div>
+            <div class="stat-cell"><div class="stat-value">31</div><div class="stat-label">Overs</div></div>
+          </div></div>
+        </div>
+        <p class="notes">Opens the batting; bowls the tough overs at the death.</p>
+        <div class="bid-history">
+          <div class="bid-row leading"><span class="dot" style="background:#f43f5e"></span><span>Power Rangers</span><span class="bid-amt">2,400</span></div>
+          <div class="bid-row"><span class="dot" style="background:#3b82f6"></span><span>Underdogs</span><span class="bid-amt">2,200</span></div>
+          <div class="bid-row"><span class="dot" style="background:#f43f5e"></span><span>Power Rangers</span><span class="bid-amt">2,000</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card bid-panel">
+        <h3>Record a bid — next min 2,600</h3>
+        <div class="bid-buttons">
+          <button class="btn bid-btn" style="border-color:#f43f5e;color:#f43f5e" disabled><span class="bid-btn-name">Power Rangers</span><span class="bid-btn-amt">LEADING</span></button>
+          <button class="btn bid-btn" style="border-color:#3b82f6;color:#3b82f6"><span class="bid-btn-name">Underdogs</span><span class="bid-btn-amt">2,600</span></button>
+        </div>
+        <div class="custom-bid">
+          <select class="input"><option>Team…</option></select>
+          <input class="input" placeholder="amount">
+          <button class="btn">Bid</button>
+        </div>
+        <div class="hammer-row">
+          <button class="btn ok big grow">🔨 Sold · 2,400</button>
+          <button class="btn warn" disabled>Unsold</button>
+        </div>
+        <div class="ghost-row">
+          <button class="btn ghost sm">Undo last bid</button>
+          <button class="btn ghost sm">Cancel lot</button>
+          <button class="btn ghost sm">⏱ 10s</button>
+          <button class="btn ghost sm">⏱ 20s</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Live purse tracker</h3>
+        <table class="table">
+          <thead><tr><th>Team</th><th class="num">Left</th><th class="num">Squad</th><th class="num">Max bid</th></tr></thead>
+          <tbody>
+            <tr><td><span class="team-cell"><span class="sq" style="background:#f43f5e"></span>Power Rangers</span></td><td class="num">18,600</td><td class="num">5</td><td class="num">14,200</td></tr>
+            <tr><td><span class="team-cell"><span class="sq" style="background:#3b82f6"></span>Underdogs</span></td><td class="num">21,000</td><td class="num">4</td><td class="num">16,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= TEAM PAGE (PHONE) ================= -->
+<section class="demo"><div class="wrap">
+  <h2 class="demo-title">Captain · phone</h2>
+  <p class="demo-sub">The money bar is the Running app's stat triplet. Hold-to-bid works like the buy button: holding fills it with mint, and leading turns it solid mint. Try it: press and hold.</p>
+  <div class="line" style="align-items:flex-start;gap:24px">
+    <div class="phone" style="--team-color:#3b82f6">
+      <header class="topbar">
+        <div class="topbar-left"><span class="sq" style="width:16px;height:16px;background:#3b82f6"></span><span class="brand">Underdogs</span></div>
+        <span class="conn-dot on">Live</span>
+      </header>
+      <div class="phone-tabs"><button class="tab active">Live</button><button class="tab">My squad</button><button class="tab">Pool &amp; watchlist</button></div>
+      <div class="money-bar">
+        <div class="money-cell"><div class="money-value">21,000</div><div class="money-label">Remaining</div></div>
+        <div class="money-cell"><div class="money-value">9,000</div><div class="money-label">Spent</div></div>
+        <div class="money-cell"><div class="money-value">4<span class="muted">/12</span></div><div class="money-label">Squad</div></div>
+        <div class="money-cell accent"><div class="money-value">16,000</div><div class="money-label">Max next bid</div></div>
+      </div>
+      <div class="phone-body">
+        <div class="card lot-card">
+          <div class="lot-id">
+            <span class="player-photo md" style="width:72px;height:72px;font-size:26px" role="img" aria-label="Ishaan Bora">IB</span>
+            <div style="min-width:0">
+              <div class="tags"><span class="tier-badge" style="color:#fbbf24;border-color:#fbbf24">Gold</span><span class="badge hot">Hot #2</span></div>
+              <h1 class="lot-name">Ishaan Bora</h1>
+              <div class="lot-meta">All-rounder · base <b>1,000</b></div>
+            </div>
+          </div>
+          <div class="line" style="justify-content:space-between;margin-top:16px;align-items:flex-end">
+            <div><div class="cap">Current bid</div><div class="lot-bid-amount" style="margin-top:4px">2,400</div><div class="lot-bid-team"><span class="sq" style="background:#f43f5e"></span>Power Rangers lead</div></div>
+            <div class="hammer-timer">7s</div>
+          </div>
+          <button class="btn primary bid-big hold-bid" id="holdDemo" style="--hold-ms:600ms"><span class="hold-fill"></span><span class="hold-label">Hold to bid 2,600</span></button>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:300px">
+      <span class="cap demo-label" style="margin-top:0">Hold-to-bid states</span>
+      <button class="btn primary bid-big hold-bid demo-half"><span class="hold-fill"></span><span class="hold-label">Holding… 2,600</span></button>
+      <button class="btn primary bid-big hold-bid leading"><span class="hold-fill"></span><span class="hold-label">✅ You're leading · 2,600</span></button>
+      <button class="btn primary bid-big hold-bid" disabled><span class="hold-fill"></span><span class="hold-label">Exceeds your max bid</span></button>
+      <span class="cap demo-label">Pool &amp; watchlist</span>
+      <div class="card">
+        <div class="line" style="gap:8px;margin-bottom:16px"><button class="tab active">Still to buy</button><button class="tab">🔥 Hot list</button><button class="tab">⭐ Watchlist</button></div>
+        <table class="table">
+          <thead><tr><th>Player</th><th>Tier</th><th class="num">Base</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td><span class="team-cell" style="font-weight:700"><span class="player-photo sm">IB</span>Ishaan Bora</span></td><td><span class="tier-badge" style="color:#fbbf24;border-color:#fbbf24">Gold</span></td><td class="num">1,000</td><td><span class="status status-available">Available</span></td></tr>
+            <tr class="row-you"><td><span class="team-cell" style="font-weight:700"><span class="player-photo sm">ND</span>Nikhil Dutta</span></td><td><span class="tier-badge" style="color:#34d399;border-color:#34d399">Emerald</span></td><td class="num">600</td><td><span class="status status-sold">Sold</span></td></tr>
+            <tr class="row-dim"><td><span class="team-cell" style="font-weight:700"><span class="player-photo sm">RK</span>Rishi Kakoti</span></td><td><span class="tier-badge" style="color:#c4b5fd;border-color:#c4b5fd">New Players</span></td><td class="num">200</td><td><span class="status status-unsold">Unsold</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= PROJECTOR ================= -->
+<section class="demo"><div class="wrap">
+  <h2 class="demo-title">Projector · lot view</h2>
+  <p class="demo-sub">This is the black editorial section of the Running page, at broadcast scale. Money is monochrome and the ring is mint. The leading team gets a flat plate, and its purse cell inverts.</p>
+  <div class="screen-frame">
+    <div class="scr-page" style="--tier:#fbbf24;--lead:#f43f5e">
+      <header class="scr-head">
+        <div class="scr-brand"><span class="scr-brand-bar"></span>DTC Season 3</div>
+        <span class="scr-stagechip">Gold round</span>
+        <div class="scr-head-right"><span class="scr-icon">☀</span><span class="scr-icon">🔔</span><span class="scr-live"><span class="scr-live-dot"></span>Live</span></div>
+      </header>
+      <main class="scr-main">
+        <div class="scr-id">
+          <div class="scr-lotline"><span>Player 9 of 24</span><span>Gold 3 of 8</span><span>Timeout after 16</span></div>
+          <div class="scr-id-head">
+            <div class="scr-photo">IB</div>
+            <div>
+              <h1 class="scr-name">Ishaan Bora</h1>
+              <div class="scr-meta"><span class="scr-chip tier">Gold</span><span class="scr-chip role">All-rounder</span><span class="scr-chip base">Base 1,000</span><span class="scr-chip hot">Hot #2</span></div>
+            </div>
+          </div>
+          <div class="scr-statgroups">
+            <div class="scr-sg"><div class="scr-sg-title">MVP</div><div class="scr-sg-cells"><div class="scr-stat"><div class="scr-stat-v">412</div><div class="scr-stat-l">Points</div></div><div class="scr-stat"><div class="scr-stat-v">9</div><div class="scr-stat-l">Matches</div></div><div class="scr-stat"><div class="scr-stat-v">3</div><div class="scr-stat-l">POTM</div></div><div class="scr-stat"><div class="scr-stat-v">45.8</div><div class="scr-stat-l">Per match</div></div><div class="scr-stat"><div class="scr-stat-v">2</div><div class="scr-stat-l">Seasons</div></div></div></div>
+            <div class="scr-sg"><div class="scr-sg-title">Bat</div><div class="scr-sg-cells"><div class="scr-stat"><div class="scr-stat-v">286</div><div class="scr-stat-l">Runs</div></div><div class="scr-stat"><div class="scr-stat-v">35.7</div><div class="scr-stat-l">Average</div></div><div class="scr-stat"><div class="scr-stat-v">142</div><div class="scr-stat-l">Strike rate</div></div><div class="scr-stat"><div class="scr-stat-v">24</div><div class="scr-stat-l">Fours</div></div><div class="scr-stat"><div class="scr-stat-v">11</div><div class="scr-stat-l">Sixes</div></div></div></div>
+            <div class="scr-sg"><div class="scr-sg-title">Bowl</div><div class="scr-sg-cells"><div class="scr-stat"><div class="scr-stat-v">12</div><div class="scr-stat-l">Wickets</div></div><div class="scr-stat"><div class="scr-stat-v">6.8</div><div class="scr-stat-l">Economy</div></div><div class="scr-stat"><div class="scr-stat-v">18.4</div><div class="scr-stat-l">Average</div></div><div class="scr-stat"><div class="scr-stat-v">3/14</div><div class="scr-stat-l">Best</div></div><div class="scr-stat"><div class="scr-stat-v">31</div><div class="scr-stat-l">Overs</div></div></div></div>
+          </div>
+        </div>
+        <div class="scr-theatre">
+          <div class="scr-theatre-top">
+            <div><div class="scr-eyebrow">Current bid</div><div class="scr-amount">2,400</div></div>
+            <div class="scr-ring">
+              <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="52"/><circle class="arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="114"/></svg>
+              <div class="scr-ring-num">7</div>
+            </div>
+          </div>
+          <div class="scr-plate"><span>Power Rangers</span></div>
+          <div class="scr-nextmin">Next bid ≥ <b>2,600</b></div>
+          <div class="scr-feed">
+            <div class="scr-bid-row" style="--team:#f43f5e"><span class="bar"></span><span class="team">Power Rangers</span><span class="amt">2,400</span></div>
+            <div class="scr-bid-row" style="--team:#3b82f6"><span class="bar"></span><span class="team">Underdogs</span><span class="amt">2,200</span></div>
+            <div class="scr-bid-row" style="--team:#f43f5e"><span class="bar"></span><span class="team">Power Rangers</span><span class="amt">2,000</span></div>
+          </div>
+        </div>
+      </main>
+      <footer class="scr-foot">
+        <div class="scr-cell leading" style="--team:#f43f5e">
+          <div class="scr-cell-main"><div class="scr-cell-name">Power Rangers</div><div class="scr-purse">18,600</div><div class="scr-squad">5 of 12 · leading</div></div>
+          <div class="scr-cell-side"><div class="lbl">Max bid</div><div class="val">14,200</div></div>
+          <div class="scr-fuel"><i style="transform:scaleX(.62)"></i></div>
+        </div>
+        <div class="scr-cell" style="--team:#3b82f6">
+          <div class="scr-cell-main"><div class="scr-cell-name">Underdogs</div><div class="scr-purse">21,000</div><div class="scr-squad">4 of 12</div></div>
+          <div class="scr-cell-side"><div class="lbl">Max bid</div><div class="val">16,000</div></div>
+          <div class="scr-fuel"><i style="transform:scaleX(.7)"></i></div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <span class="cap demo-label">Idle view headline: the inline highlight box from the adidas hero</span>
+  <div class="screen-frame idle-frame"><div class="scr-page"><div class="idle-strip"><div class="scr-idle-headline">Next draw: <span class="tier">Emerald</span></div></div></div></div>
+
+  <span class="cap demo-label">SOLD / UNSOLD takeover (static frame)</span>
+  <div class="grid-2">
+    <div class="screen-frame sold-frame" style="--fc:#f43f5e">
+      <span class="panel a"></span><span class="panel b"></span><span class="scrim"></span>
+      <div class="sold-stack">
+        <div class="scr-stamp">Sold</div>
+        <div class="sold-photo">IB</div>
+        <div class="sold-name">Ishaan Bora</div>
+        <div class="scr-payoff-team">Power Rangers</div>
+        <div class="scr-payoff-price">2,400<span class="pts">pts</span></div>
+      </div>
+    </div>
+    <div class="screen-frame sold-frame" style="--fc:#1e1e1e">
+      <span class="panel a" style="background:#000"></span><span class="panel b" style="background:#1e1e1e"></span>
+      <div class="sold-stack">
+        <div class="scr-stamp unsold">Unsold</div>
+        <div class="sold-photo" style="filter:grayscale(1);border-color:#929396">RK</div>
+        <div class="sold-name">Rishi Kakoti</div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<div class="wrap footer-note">
+  Fonts: Anton, Barlow and Barlow Condensed (Google Fonts) stand in for adidas' proprietary typefaces. Colours, spacing, motion and component metrics come from the adidas Running site's design tokens; see HANDOFF.md.
+</div>
+
+<script>
+  // Theme toggle mirrors the app: dark is the default, light = html[data-theme="light"].
+  const root = document.documentElement;
+  const lbl = document.getElementById('themeLbl');
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    if (root.dataset.theme === 'light') delete root.dataset.theme; else root.dataset.theme = 'light';
+    lbl.textContent = root.dataset.theme === 'light' ? 'Light' : 'Dark';
+  });
+
+  // Press-and-hold demo, same timing as TeamPage (600ms hold).
+  const hold = document.getElementById('holdDemo');
+  let timer = null;
+  const label = hold.querySelector('.hold-label');
+  const reset = () => { clearTimeout(timer); hold.classList.remove('holding'); };
+  hold.addEventListener('pointerdown', () => {
+    if (hold.classList.contains('leading')) { hold.classList.remove('leading'); label.textContent = 'Hold to bid 2,600'; return; }
+    hold.classList.add('holding');
+    timer = setTimeout(() => { hold.classList.remove('holding'); hold.classList.add('leading'); label.textContent = "✅ You're leading · 2,600"; }, 600);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((e) => hold.addEventListener(e, reset));
+</script>
+</body>
+</html>

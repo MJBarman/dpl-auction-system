@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { Icon } from '../icons';
 import { loadSession, saveSession } from '../session';
 import { useApp } from '../store';
 import { ConnectionDot, ThemeToggle, useToast } from '../ui';
@@ -62,7 +63,7 @@ export default function Landing() {
 
       <div className="landing-cards">
         <section className="card">
-          <h2>🧢 Captain / Bidder</h2>
+          <h2><Icon name="user" /> Captain / Bidder</h2>
           <p className="muted small">Enter your private team code to open your team dashboard.</p>
           {session?.role === 'team' ? (
             <div className="stack">
@@ -86,13 +87,13 @@ export default function Landing() {
         </section>
 
         <section className="card">
-          <h2>📺 Auction Screen</h2>
+          <h2><Icon name="monitor" /> Auction Screen</h2>
           <p className="muted small">Full-screen live display for the projector or TV in the room.</p>
           <Link className="btn big" to="/screen">Open the big screen</Link>
         </section>
 
         <section className="card">
-          <h2>🔨 Auctioneer (Admin)</h2>
+          <h2><Icon name="gavel" /> Auctioneer (Admin)</h2>
           <p className="muted small">Run the auction: draw players, record bids, hammer sales.</p>
           {session?.role === 'admin' ? (
             <Link className="btn big" to="/admin">Open admin console</Link>

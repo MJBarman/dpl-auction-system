@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { Icon } from '../icons';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { PlayerView, StateView, TeamView, WatchlistEntry } from '../types';
@@ -138,14 +139,14 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
               : `You have your ${state.settings.maxSquad} — you are out of the bidding. The remaining players go to ${last.name} at base price.`}
           </div>
         )}
-        {state.stage === 'completed' && <div className="card center-note"><h2>🏁 Auction complete</h2><p className="muted">Check “My squad” for your final roster.</p></div>}
+        {state.stage === 'completed' && <div className="card center-note"><h2>Auction complete</h2><p className="muted">Check “My squad” for your final roster.</p></div>}
         {(state.stage === 'live' || state.stage === 'accelerated') && !player && state.timeout && (
           <div className="card center-note timeout-card">
-            <h2>⏸ Strategic timeout</h2>
+            <h2>Strategic timeout</h2>
             <div className={`timeout-timer${timeoutSecs !== null && timeoutSecs <= 0 ? ' done' : ''}`} role="timer" aria-live="off">
               {timeoutSecs !== null && timeoutSecs <= 0
                 ? 'Countdown finished'
-                : `⏱ ${formatClock(timeoutSecs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000))} remaining`}
+                : `${formatClock(timeoutSecs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000))} remaining`}
             </div>
             <p className="muted">
               {state.timeout.setNumber !== null
@@ -174,7 +175,7 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                 <div className="muted">{player.role || '—'} · base {fmt(player.basePrice)} pts</div>
                 {wl && (wl.starred || wl.targetPrice != null) && (
                   <div className="wl-hint">
-                    ⭐ On your watchlist{wl.targetPrice != null ? ` — your target: ${fmt(wl.targetPrice)} pts` : ''}
+                    <Icon name="star" filled /> On your watchlist{wl.targetPrice != null ? ` — your target: ${fmt(wl.targetPrice)} pts` : ''}
                     {wl.targetPrice != null && lot.currentBid !== null && lot.currentBid >= wl.targetPrice ? ' (passed!)' : ''}
                   </div>
                 )}
@@ -185,7 +186,7 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                 <div className="lot-bid-amount">{lot.currentBid !== null ? fmt(lot.currentBid) : `Opens at ${fmt(player.basePrice)}`}</div>
                 <div className="lot-bid-team">
                   {leading
-                    ? '✅ YOU are leading'
+                    ? <><Icon name="check" /> YOU are leading</>
                     : lot.leadingTeamId
                       ? `${state.teams.find((t) => t.id === lot.leadingTeamId)?.name} leads`
                       : 'No bids yet'}
@@ -343,19 +344,22 @@ function HoldBidButton({ lotId, nextMinBid, canBid, reason, leading, busy, onBid
 
   return (
     <>
-      <button
-        className={`btn primary bid-big hold-bid${leading ? ' leading' : ''}${holding ? ' holding' : ''}`}
-        disabled={disabled || !armed}
-        onPointerDown={startHold}
-        onPointerUp={cancelHold}
-        onPointerLeave={cancelHold}
-        onPointerCancel={cancelHold}
-        onContextMenu={(e) => e.preventDefault()}
-        style={{ ['--hold-ms' as any]: `${HOLD_MS}ms` }}
-      >
-        <span className="hold-fill" aria-hidden />
-        <span className="hold-label">{label}</span>
-      </button>
+      {/* presentational: the dock keeps the button in thumb reach (sticky) */}
+      <div className="hold-dock">
+        <button
+          className={`btn primary bid-big hold-bid${leading ? ' leading' : ''}${holding ? ' holding' : ''}`}
+          disabled={disabled || !armed}
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
+          onPointerCancel={cancelHold}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ ['--hold-ms' as any]: `${HOLD_MS}ms` }}
+        >
+          <span className="hold-fill" aria-hidden />
+          <span className="hold-label">{label}</span>
+        </button>
+      </div>
       {canBid && !leading && !busy && (
         <p className="muted small center-note hold-hint">
           Press and <b>hold</b> to bid — quick taps do nothing, so a slip can't place a bid.
@@ -422,6 +426,7 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
       {roster.length === 0 ? (
         <p className="muted">No players yet — your spends will appear here the moment the hammer falls.</p>
       ) : (
+        <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Player</th><th>Role</th>{showTier && <th>Tier</th>}<th>Price</th><th>How</th></tr></thead>
           <tbody>
@@ -436,6 +441,7 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -473,13 +479,13 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
         <div className="row">
           {(['available', 'hot', 'starred', 'all'] as const).map((f) => (
             <button key={f} className={`tab${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
-              {f === 'available' ? 'Still to buy' : f === 'hot' ? '🔥 Hot list' : f === 'starred' ? '⭐ Watchlist' : 'Everyone'}
+              {f === 'available' ? 'Still to buy' : f === 'hot' ? <><Icon name="fire" /> Hot list</> : f === 'starred' ? <><Icon name="star" /> Watchlist</> : 'Everyone'}
             </button>
           ))}
         </div>
       </div>
       <p className="muted small">
-        Tap a player for their full DTC 1 + DTC 2 record. ⭐ stars, target prices and notes are private to your team — nobody else can see them.
+        Tap a player for their full DTC 1 + DTC 2 record. <Icon name="star" /> Stars, target prices and notes are private to your team — nobody else can see them.
       </p>
       <div className="table-scroll">
       <table className="table pool-table">
@@ -490,13 +496,13 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
             const soldTo = p.teamId ? state.teams.find((t) => t.id === p.teamId) : null;
             return (
               <tr key={p.id} className={p.status === 'sold' ? 'row-dim' : ''}>
-                <td><button className={`star${wl?.starred ? ' on' : ''}`} onClick={() => toggleStar(p)}>{wl?.starred ? '⭐' : '☆'}</button></td>
+                <td><button className={`star${wl?.starred ? ' on' : ''}`} onClick={() => toggleStar(p)} aria-pressed={!!wl?.starred} aria-label={`Watchlist: ${p.name}`}><Icon name="star" filled={!!wl?.starred} /></button></td>
                 <td onClick={() => setEditing(p)} className="clickable">
                   <div className="player-cell">
                     <PlayerPhoto url={p.photoUrl} name={p.name} size="sm" />
                     <span>{p.name} <PlayerBadges player={p} /></span>
                   </div>
-                  {wl?.note ? <div className="muted small">📝 {wl.note}</div> : null}
+                  {wl?.note ? <div className="muted small"><Icon name="note" /> {wl.note}</div> : null}
                 </td>
                 {showTier && <td><TierBadge state={state} tierKey={p.tierKey} /></td>}
                 <td className="muted small hide-narrow">{p.role}</td>
@@ -505,7 +511,7 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                 <td className="num">{wl?.targetPrice != null ? fmt(wl.targetPrice) : '—'}</td>
                 <td>
                   {p.status === 'sold'
-                    ? <span className="muted small">{soldTo?.id === teamId ? '✅ yours' : `→ ${soldTo?.name}`} ({fmt(p.price)})</span>
+                    ? <span className="muted small">{soldTo?.id === teamId ? <><Icon name="check" /> yours</> : `→ ${soldTo?.name}`} ({fmt(p.price)})</span>
                     : <span className={`status status-${p.status}`}>{p.status}</span>}
                 </td>
               </tr>
@@ -548,7 +554,7 @@ function WatchlistModal({ state, player, entry, onClose }: {
       <hr className="sep" />
       <p className="muted small">Private planning — only your team sees this.</p>
       <label className="check">
-        <input type="checkbox" checked={starred} onChange={(e) => setStarred(e.target.checked)} /> ⭐ On my watchlist
+        <input type="checkbox" checked={starred} onChange={(e) => setStarred(e.target.checked)} /> <Icon name="star" /> On my watchlist
       </label>
       <div className="form-grid">
         <label>My max price (pts)<input className="input" type="number" value={target} onChange={(e) => setTarget(e.target.value)} /></label>

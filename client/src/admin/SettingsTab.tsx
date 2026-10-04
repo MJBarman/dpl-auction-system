@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { api, downloadUrl } from '../api';
+import { Icon } from '../icons';
 import { IncrementRung, StateView, Tier } from '../types';
 import { maxFirstBid, useAction, useToast } from '../ui';
 
@@ -120,8 +121,8 @@ export default function SettingsTab({ state }: { state: StateView }) {
             <span className="muted small">step</span>
             <input className="input" type="number" value={r.step}
               onChange={(e) => setIncrements(increments.map((x, j) => (j === i ? { ...x, step: e.target.value } : x)))} />
-            <button className="btn ghost" disabled={increments.length <= 1}
-              onClick={() => setIncrements(increments.filter((_, j) => j !== i))}>✕</button>
+            <button className="btn ghost" disabled={increments.length <= 1} aria-label="Remove this rung"
+              onClick={() => setIncrements(increments.filter((_, j) => j !== i))}><Icon name="close" /></button>
           </div>
         ))}
         <button className="btn ghost" onClick={() => setIncrements([...increments, { upTo: '', step: '100' }])}>+ Add rung</button>
@@ -144,8 +145,8 @@ export default function SettingsTab({ state }: { state: StateView }) {
               onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, basePrice: e.target.value } : x)))} />
             <input className="input color" type="color" value={t.color}
               onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))} />
-            <button className="btn ghost" disabled={tiers.length <= 1}
-              onClick={() => setTiers(tiers.filter((_, j) => j !== i))}>✕</button>
+            <button className="btn ghost" disabled={tiers.length <= 1} aria-label="Remove this tier"
+              onClick={() => setTiers(tiers.filter((_, j) => j !== i))}><Icon name="close" /></button>
           </div>
         ))}
         <button className="btn ghost" onClick={() => setTiers([...tiers, { key: '', name: 'New tier', basePrice: '200', color: '#94a3b8' }])}>
@@ -154,7 +155,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
         <p className="muted small">Tier order here = auction round order. A tier with players in it can’t be removed.</p>
       </div>
 
-      <button className="btn primary big" onClick={save}>💾 Save settings</button>
+      <button className="btn primary big" onClick={save}>Save settings</button>
 
       <div className="card">
         <h3>Security</h3>
@@ -170,9 +171,9 @@ export default function SettingsTab({ state }: { state: StateView }) {
       <div className="card">
         <h3>Data</h3>
         <div className="row wrap">
-          <a className="btn" href={downloadUrl('/api/admin/export.csv')} download>⬇ Export results (CSV)</a>
-          <a className="btn" href={downloadUrl('/api/admin/backup.json')} download>⬇ Download backup (JSON)</a>
-          <button className="btn" onClick={() => fileRef.current?.click()}>⬆ Restore backup…</button>
+          <a className="btn" href={downloadUrl('/api/admin/export.csv')} download><Icon name="download" /> Export results (CSV)</a>
+          <a className="btn" href={downloadUrl('/api/admin/backup.json')} download><Icon name="download" /> Download backup (JSON)</a>
+          <button className="btn" onClick={() => fileRef.current?.click()}><Icon name="upload" /> Restore backup…</button>
           <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }}
             onChange={(e) => e.target.files?.[0] && restore(e.target.files[0])} />
         </div>

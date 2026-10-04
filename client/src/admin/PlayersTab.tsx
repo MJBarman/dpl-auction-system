@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
+import { Icon } from '../icons';
 import { PlayerView, StateView } from '../types';
 import { fmt, Modal, PlayerPhoto, useAction, useToast } from '../ui';
 
@@ -79,10 +80,11 @@ export default function PlayersTab({ state }: { state: StateView }) {
             }
           }}
         >
-          📸 Copy photo links
+          <Icon name="camera" /> Copy photo links
         </button>
       </div>
 
+      <div className="table-scroll">
       <table className="table players-table">
         <thead>
           <tr><th>Player</th><th>Tier</th><th>Role</th><th>Base</th><th>Status</th><th>Team</th><th>Price</th><th></th></tr>
@@ -124,6 +126,7 @@ export default function PlayersTab({ state }: { state: StateView }) {
           })}
         </tbody>
       </table>
+      </div>
       <p className="muted small">{players.length} of {state.players.length} players shown.</p>
 
       {(adding || editing) && (

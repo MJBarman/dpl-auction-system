@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { Icon } from '../icons';
 import { StateView, TeamView } from '../types';
 import { fmt, Modal, useAction, useToast } from '../ui';
 
@@ -29,7 +30,7 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
 
   useEffect(() => {
     let alive = true;
-    QRCode.toDataURL(joinUrl, { margin: 1, width: 160, color: { dark: '#0b1020', light: '#ffffff' } })
+    QRCode.toDataURL(joinUrl, { margin: 1, width: 160, color: { dark: '#000000', light: '#ffffff' } })
       .then((url) => { if (alive) setQr(url); })
       .catch(() => {});
     return () => { alive = false; };
@@ -82,7 +83,7 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
               ? 'No devices signed in yet'
               : devices === 1
                 ? '1 device signed in'
-                : `⚠ ${devices} devices signed in — every one of them can bid. Unexpected? "New code" logs them all out.`}
+                : <><Icon name="warning" /> {devices} devices signed in — every one of them can bid. Unexpected? &quot;New code&quot; logs them all out.</>}
           </div>
         </div>
       </div>

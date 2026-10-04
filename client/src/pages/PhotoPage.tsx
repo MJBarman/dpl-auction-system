@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Icon } from '../icons';
 import { PlayerPhoto } from '../ui';
 
 /** Public photo-upload page behind a per-player secret link (/photo/CODE).
@@ -129,7 +130,7 @@ export default function PhotoPage() {
   return (
     <div className="photo-page">
       <div className="card">
-        <h1>📸 Your auction photo</h1>
+        <h1><Icon name="camera" /> Your auction photo</h1>
         <p className="muted">
           Hi <b>{info.name}</b>{info.role ? ` (${info.role}` : ''}{info.role && info.tierName ? `, ${info.tierName})` : info.role ? ')' : ''}!
           {' '}This photo appears next to your name on the big screen and in the team dashboards during the auction.

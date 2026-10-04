@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { api } from '../api';
+import { Icon } from '../icons';
 import { StateView } from '../types';
 import {
   flatReserve, fmt, formatClock, lastTeamBuying, PlayerBadges, PlayerPhoto, StatsGrid, TIMEOUT_COUNTDOWN_MS, TierBadge,
@@ -32,7 +33,7 @@ export default function AuctionConsole({ state }: { state: StateView }) {
               className="btn warn wide"
               onClick={() => run(() => api.post('/api/admin/auction/undo'), 'Undone')}
             >
-              ↩ {state.undoLabel}
+              <Icon name="undo" /> {state.undoLabel}
             </button>
           )}
         </div>
@@ -75,7 +76,7 @@ function StageBar({ state }: { state: StateView }) {
       </div>
       {sets && (
         <div className={`tier-chip${state.timeout ? ' timeout-chip' : ''}`}>
-          <span>{state.timeout ? '⏸ Timeout' : `Set ${sets.setNumber}`}</span>
+          <span>{state.timeout ? <><Icon name="pause" /> Timeout</> : `Set ${sets.setNumber}`}</span>
           <span className="muted">
             {state.timeout ? 'auction paused' : `${sets.inSet}/${sets.every} auctioned`}
           </span>
@@ -105,7 +106,7 @@ function SetupPanel({ state }: { state: StateView }) {
         have them on their phones under “How bidding works”.
       </p>
       <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/start'), 'Auction is live!')}>
-        ▶ Start the auction
+        Start the auction
       </button>
     </div>
   );
@@ -124,7 +125,7 @@ function RulesToggle({ state }: { state: StateView }) {
         on ? 'Rules taken off the big screen' : 'Rules are on the big screen',
       )}
     >
-      📋 {on ? 'Take the rules off the big screen' : 'Show the rules on the big screen'}
+      <Icon name="clipboard" /> {on ? 'Take the rules off the big screen' : 'Show the rules on the big screen'}
     </button>
   );
 }
@@ -137,11 +138,11 @@ function TimeoutPanel({ state }: { state: StateView }) {
   const finished = secs !== null && secs <= 0;
   return (
     <div className="card timeout-card">
-      <h2>⏸ Strategic timeout</h2>
+      <h2>Strategic timeout</h2>
       <div className={`timeout-timer${finished ? ' done' : ''}`} role="timer" aria-live="off">
         {finished
           ? 'Countdown finished'
-          : `⏱ ${formatClock(secs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000))} remaining`}
+          : `${formatClock(secs ?? Math.round(TIMEOUT_COUNTDOWN_MS / 1000))} remaining`}
       </div>
       <p className="muted">
         {t.setNumber !== null
@@ -175,7 +176,7 @@ function TimeoutPanel({ state }: { state: StateView }) {
         })}
       </div>
       <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/resume'), 'Auction resumed')}>
-        ▶ Resume the auction
+        Resume the auction
       </button>
     </div>
   );
@@ -208,7 +209,7 @@ function BetweenLots({ state }: { state: StateView }) {
             </p>
           )}
           <button className="btn primary big" onClick={() => run(() => api.post('/api/admin/auction/next'))}>
-            🎲 Draw next player
+            Draw next player
           </button>
           <div className="row" style={{ marginTop: 12 }}>
             <select className="input" value={pickId} onChange={(e) => setPickId(e.target.value)}>
@@ -232,7 +233,7 @@ function BetweenLots({ state }: { state: StateView }) {
               className="btn ghost"
               onClick={() => run(() => api.post('/api/admin/auction/timeout'), 'Strategic timeout')}
             >
-              ⏸ Call a strategic timeout now
+              <Icon name="pause" /> Call a strategic timeout now
             </button>
           </div>
           <RulesToggle state={state} />
@@ -255,13 +256,13 @@ function PhaseEnd({ state }: { state: StateView }) {
           <p className="muted">{unsold} player(s) unsold: {state.players.filter((p) => p.status === 'unsold').map((p) => p.name).join(', ')}.</p>
           <div className="stack">
             <button className="btn primary" onClick={() => run(() => api.post('/api/admin/auction/accelerated'), 'Accelerated round started')}>
-              ⚡ {state.stage === 'accelerated' ? 'Run another accelerated pass' : 'Start accelerated round'}
+              {state.stage === 'accelerated' ? 'Run another accelerated pass' : 'Start accelerated round'}
             </button>
             <button
               className="btn"
               onClick={() => run(() => api.post('/api/admin/auction/allot'), 'Unsold players allotted at base price')}
             >
-              📋 Auto-allot unsold at base price (largest purse first)
+              Auto-allot unsold at base price (largest purse first)
             </button>
             <p className="muted small">Auto-allot follows rule 8: each unsold player goes at base price to the open-slot team with the largest remaining purse (teams below the minimum first). You can also assign manually from the Players tab.</p>
           </div>
@@ -274,7 +275,7 @@ function PhaseEnd({ state }: { state: StateView }) {
         style={{ marginTop: 12 }}
         onClick={() => run(() => api.post('/api/admin/auction/complete', { force: unsold > 0 }), 'Auction completed')}
       >
-        🏁 Complete the auction{unsold > 0 ? ' (force)' : ''}
+        Complete the auction{unsold > 0 ? ' (force)' : ''}
       </button>
     </>
   );
@@ -407,7 +408,7 @@ function BidPanel({ state }: { state: StateView }) {
             expectedPrice: lot.currentBid,
           }))}
         >
-          🔨 SOLD {lot.currentBid ? `· ${fmt(lot.currentBid)}` : ''}
+          <Icon name="gavel" /> SOLD {lot.currentBid ? `· ${fmt(lot.currentBid)}` : ''}
         </button>
         <button
           className="btn warn"
@@ -420,19 +421,19 @@ function BidPanel({ state }: { state: StateView }) {
       </div>
       <div className="row">
         <button className="btn ghost" disabled={lot.bids.length === 0} onClick={() => run(() => api.post('/api/admin/auction/undo-bid', { lotId: lot.id }))}>
-          ↩ Undo last bid
+          <Icon name="undo" /> Undo last bid
         </button>
         <button className="btn ghost" onClick={() => run(() => api.post('/api/admin/auction/cancel-lot'))}>
           Cancel lot
         </button>
         {[10, 20].map((s) => (
           <button key={s} className="btn ghost" onClick={() => run(() => api.post('/api/admin/auction/timer', { seconds: s }))}>
-            ⏱ {s}s
+            <Icon name="timer" /> {s}s
           </button>
         ))}
         {lot.timerEndsAt && (
           <button className="btn ghost" onClick={() => run(() => api.post('/api/admin/auction/timer', { seconds: 0 }))}>
-            Clear ⏱
+            Clear <Icon name="timer" />
           </button>
         )}
       </div>
@@ -451,7 +452,7 @@ function PurseTable({ state }: { state: StateView }) {
         <tbody>
           {state.teams.map((t) => (
             <tr key={t.id} className={t.full ? 'row-dim' : ''}>
-              <td><span className="dot" style={{ background: t.color }} /> {t.name}{t.full ? ' ✅' : ''}</td>
+              <td><span className="dot" style={{ background: t.color }} /> {t.name}{t.full ? <> <Icon name="check" /></> : ''}</td>
               <td className="num">{fmt(t.remaining)}</td>
               <td className="num">{t.count}/{state.settings.maxSquad}</td>
               <td className="num">{t.full ? '—' : fmt(t.maxBid)}</td>
@@ -473,7 +474,7 @@ function ResultsPanel({ state }: { state: StateView }) {
   const run = useAction();
   return (
     <div className="card">
-      <h2>🏁 Auction complete</h2>
+      <h2>Auction complete</h2>
       <div className="results-grid">
         {state.teams.map((t) => (
           <div key={t.id} className="result-team" style={{ borderColor: t.color }}>
@@ -494,7 +495,7 @@ function ResultsPanel({ state }: { state: StateView }) {
       </div>
       <p className="muted small">Export the full results from Settings → Data. Need to fix something? Undo, or release a player from the Players tab.</p>
       <button className="btn warn" onClick={() => run(() => api.post('/api/admin/auction/undo'), 'Reopened')}>
-        ↩ Reopen the auction (undo complete)
+        <Icon name="undo" /> Reopen the auction (undo complete)
       </button>
     </div>
   );

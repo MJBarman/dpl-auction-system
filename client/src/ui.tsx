@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { LotView, PlayerStats, PlayerView, StateView, TeamView, Tier } from './types';
+import { Icon } from './icons';
 import { playBidSound, unlockAudio } from './sound';
 import { useTheme } from './theme';
 
@@ -375,7 +376,7 @@ export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: 
       aria-pressed={!muted}
       title={muted ? 'Bid sound is off — click to turn it on' : 'Bid sound is on — click to mute'}
     >
-      {muted ? '🔇 Bid sound off' : '🔔 Bid sound on'}
+      {muted ? 'Bid sound off' : 'Bid sound on'}
     </button>
   );
 }
@@ -392,7 +393,7 @@ export function ThemeToggle() {
       aria-pressed={theme === 'light'}
       title={toLight ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {toLight ? '☀️ Light' : '🌙 Dark'}
+      {toLight ? 'Light' : 'Dark'}
     </button>
   );
 }
@@ -410,7 +411,7 @@ export function OfflineBanner({ connected }: { connected: boolean }) {
   if (connected) return null;
   return (
     <div className="offline-banner" role="alert">
-      ⚠️ Connection lost — reconnecting… this screen may be out of date.
+      <Icon name="warning" /> Connection lost — reconnecting… this screen may be out of date.
     </div>
   );
 }
@@ -475,7 +476,7 @@ export function Modal({ title, onClose, children }: {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
-          <button className="btn ghost" onClick={onClose}>✕</button>
+          <button className="btn ghost" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
         </div>
         {children}
       </div>
