@@ -30,7 +30,7 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
 
   useEffect(() => {
     let alive = true;
-    QRCode.toDataURL(joinUrl, { margin: 1, width: 160, color: { dark: '#0b1020', light: '#ffffff' } })
+    QRCode.toDataURL(joinUrl, { margin: 1, width: 160, color: { dark: '#000000', light: '#ffffff' } })
       .then((url) => { if (alive) setQr(url); })
       .catch(() => {});
     return () => { alive = false; };
