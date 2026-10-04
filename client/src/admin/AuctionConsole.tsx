@@ -4,7 +4,7 @@ import { Icon } from '../icons';
 import { StateView } from '../types';
 import {
   flatReserve, fmt, formatClock, lastTeamBuying, PlayerBadges, PlayerPhoto, StatsGrid, TIMEOUT_COUNTDOWN_MS, TierBadge,
-  useAction, useCountdown,
+  tierFor, useAction, useCountdown,
 } from '../ui';
 
 export default function AuctionConsole({ state }: { state: StateView }) {
@@ -19,7 +19,7 @@ export default function AuctionConsole({ state }: { state: StateView }) {
           {state.stage === 'setup' && <SetupPanel state={state} />}
           {(state.stage === 'live' || state.stage === 'accelerated') &&
             (lotPlayer
-              ? <LotCard state={state} />
+              ? <LotCard key={state.lot!.id} state={state} /> /* keyed-by: lot — each player pops in fresh */
               : state.timeout
                 ? <TimeoutPanel state={state} />
                 : <BetweenLots state={state} />)}
@@ -288,7 +288,10 @@ function LotCard({ state }: { state: StateView }) {
   const timer = useCountdown(lot.timerEndsAt, state.serverTime);
 
   return (
-    <div className="card lot-card">
+    <div
+      className="card lot-card"
+      style={{ ['--tier' as any]: (state.settings.showTier !== false && tierFor(state, player.tierKey)?.color) || undefined }}
+    >
       <div className="lot-head">
         <div className="lot-id">
           <PlayerPhoto url={player.photoUrl} name={player.name} size="md" />
@@ -300,8 +303,8 @@ function LotCard({ state }: { state: StateView }) {
         </div>
         <div className="lot-bid-box">
           {timer !== null && <div className={`hammer-timer${timer <= 3 ? ' urgent' : ''}`}>{timer}s</div>}
-          <div className="lot-bid-amount">{lot.currentBid !== null ? fmt(lot.currentBid) : `Opens at ${fmt(player.basePrice)}`}</div>
-          <div className="lot-bid-team" style={{ color: leading?.color }}>
+          <div className="lot-bid-amount" key={lot.currentBid ?? 'open'}>{lot.currentBid !== null ? fmt(lot.currentBid) : `Opens at ${fmt(player.basePrice)}`}</div>
+          <div className="lot-bid-team" key={lot.leadingTeamId ?? 'none'} style={{ color: leading?.color }}>
             {leading ? `${leading.name} leads` : 'No bids yet'}
           </div>
         </div>

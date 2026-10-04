@@ -1,7 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LotView, PlayerStats, PlayerView, StateView, TeamView, Tier } from './types';
 import { Icon } from './icons';
-import { playBidSound, playSoldSound, unlockAudio } from './sound';
+import { playBidSound, playDrawSound, playSoldSound, unlockAudio } from './sound';
 import { useTheme } from './theme';
 
 export const fmt = (n: number | null | undefined): string =>
@@ -296,7 +296,7 @@ export function formatClock(totalSecs: number): string {
 
 // Default (auctioneer console) mute key. Each screen passes its own key so the
 // console, the projector and every captain's phone keep independent,
-// per-device mute preferences. One toggle covers the bid chime and SOLD.
+// per-device mute preferences. One toggle covers every auction sound on it.
 export const CONSOLE_BID_MUTE_KEY = 'dpl.bidSound.muted';
 export const SCREEN_BID_MUTE_KEY = 'dpl.bidSound.muted.screen';
 export const TEAM_BID_MUTE_KEY = 'dpl.bidSound.muted.team';
@@ -395,8 +395,41 @@ export function useSoldSound(state: StateView | null, muted: boolean): void {
   }, [state]);
 }
 
-/** Toggle for the auction sounds (bid chime and SOLD). Reads as a live on/off
- *  state, not a fire button. */
+/**
+ * Calls `onOpen` once each time the auctioneer puts a new player up while this
+ * page is watching: the first time the page sees a lot id, except in its first
+ * snapshot, so a reload mid-lot stays quiet. Undo brings a lot back under its
+ * old id, so it never counts as new. Runs before paint, so a screen can cover
+ * the new lot before it is ever drawn.
+ */
+export function useLotOpened(state: StateView | null, onOpen: (state: StateView, lot: LotView) => void): void {
+  const callback = useRef(onOpen);
+  callback.current = onOpen;
+  const seen = useRef<Set<string> | null>(null);
+  const ready = state !== null;
+  const lotId = state?.lot?.id ?? null;
+  useLayoutEffect(() => {
+    if (!state) return;
+    if (seen.current === null) {
+      seen.current = new Set(lotId ? [lotId] : []);
+      return;
+    }
+    if (!lotId || !state.lot || seen.current.has(lotId)) return;
+    seen.current.add(lotId);
+    callback.current(state, state.lot);
+  }, [ready, lotId]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** Plays the new-player sound when a fresh lot opens (see useLotOpened), on the
+ *  screens that call it — the projector and captains' phones — unless muted. */
+export function useDrawSound(state: StateView | null, muted: boolean): void {
+  useLotOpened(state, () => {
+    if (!muted) playDrawSound();
+  });
+}
+
+/** Toggle for the auction sounds (new player, bid chime and SOLD). Reads as a
+ *  live on/off state, not a fire button. */
 export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: () => void }) {
   return (
     <button
@@ -404,7 +437,7 @@ export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: 
       className={`btn ghost sound-toggle${muted ? ' muted' : ''}`}
       onClick={onToggle}
       aria-pressed={!muted}
-      title={muted ? 'Sounds are off — click to turn on the bid and SOLD sounds' : 'Sounds are on — click to mute the bid and SOLD sounds'}
+      title={muted ? 'Sounds are off — click to turn the auction sounds on' : 'Sounds are on — click to mute the auction sounds'}
     >
       {muted ? 'Sounds off' : 'Sounds on'}
     </button>

@@ -4,7 +4,8 @@ import { useApp } from '../store';
 import { LotView, PlayerView, StateView, TeamView, Tier } from '../types';
 import {
   auctionRules, flatReserve, fmt, formatClock, freshMaxBid, lastTeamBuying, OfflineBanner, overallRank, PlayerPhoto,
-  SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown, useSoldSound,
+  SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown, useDrawSound,
+  useLotOpened, useSoldSound,
 } from '../ui';
 import { useTheme } from '../theme';
 import '../screen.css';
@@ -45,6 +46,20 @@ interface FlashInfo {
   teamColor?: string;
   price?: number;
 }
+
+/** The new-player reveal: 'in' while it plays, 'out' while it lifts away. */
+interface RevealInfo {
+  id: number;
+  lotId: string;
+  player: PlayerView;
+  tier?: Tier;   // undefined when tier names are hidden
+  line: string;  // "Player 9 of 24 · Emerald 3 of 12"
+  phase: 'in' | 'out';
+}
+/** How long the reveal holds before lifting, and how long the lift takes
+ *  (screen.css .scr-reveal.out). The first bid lifts it straight away. */
+const REVEAL_HOLD_MS = 1900;
+const REVEAL_LIFT_MS = 450;
 
 /** Keeps the projector laptop's display awake while this page is showing.
  *  The browser drops the lock whenever the tab is hidden, so it is taken
@@ -88,17 +103,74 @@ function useWakeLock() {
   }, []);
 }
 
+/** Warms the browser cache with every player's photo, so a freshly drawn
+ *  player's face is already there when the reveal shows it. Projector-sized
+ *  screens only: a spectator's phone needn't spend the data. */
+function usePhotoPreload(players: PlayerView[] | undefined) {
+  const started = useRef(new Map<string, HTMLImageElement>());
+  useEffect(() => {
+    if (!players || !window.matchMedia('(min-width: 981px)').matches) return;
+    for (const p of players) {
+      if (!p.photoUrl || started.current.has(p.photoUrl)) continue;
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = p.photoUrl;
+      started.current.set(p.photoUrl, img);
+    }
+  }, [players]);
+}
+
 export default function ScreenPage() {
   const { state, connected } = useApp();
+  usePhotoPreload(state?.players);
   // Chime on each new bid; the projector keeps its own mute preference,
   // independent of the auctioneer's console.
   const { muted, toggleMuted } = useBidSound(state?.lot ?? null, SCREEN_BID_MUTE_KEY);
   useSoldSound(state, muted); // the gavel lands with the SOLD takeover
+  useDrawSound(state, muted); // the whoosh and hit land with the new-player reveal
   const { theme, toggle: toggleTheme } = useTheme();
   useWakeLock();
   const [flash, setFlash] = useState<FlashInfo | null>(null);
   const prevRef = useRef<StateView | null>(null);
   const flashIdRef = useRef(0);
+
+  // A new player put up while the screen watches gets the full-screen reveal.
+  // Decided before paint, so the new lot is never drawn uncovered first.
+  const [reveal, setReveal] = useState<RevealInfo | null>(null);
+  const revealIdRef = useRef(0);
+  useLotOpened(state, (s, lot) => {
+    const player = s.players.find((p) => p.id === lot.playerId);
+    if (!player) return;
+    const tier = s.settings.showTier !== false ? s.settings.tiers.find((t) => t.key === player.tierKey) : undefined;
+    setFlash(null); // the new player takes the stage from the last SOLD
+    setReveal({
+      id: ++revealIdRef.current,
+      lotId: lot.id,
+      player,
+      tier,
+      line: lotContext(s, player, tier).parts.filter((p) => !p.startsWith('Timeout')).join(' · '),
+      phase: 'in',
+    });
+  });
+  // Hold, then lift away, then unmount.
+  useEffect(() => {
+    if (!reveal) return;
+    const id = reveal.id;
+    const t = window.setTimeout(() => {
+      setReveal((r) => (r?.id !== id ? r : r.phase === 'in' ? { ...r, phase: 'out' } : null));
+    }, reveal.phase === 'in' ? REVEAL_HOLD_MS : REVEAL_LIFT_MS);
+    return () => window.clearTimeout(t);
+  }, [reveal]);
+  // The reveal never hides live bidding: the first bid, or the lot closing,
+  // lifts it at once.
+  const liveLotId = state?.lot?.id ?? null;
+  const liveBids = state?.lot?.bids.length ?? 0;
+  useEffect(() => {
+    if (reveal?.phase !== 'in') return;
+    if (liveLotId !== reveal.lotId || liveBids > 0) {
+      setReveal((r) => (r && r.phase === 'in' ? { ...r, phase: 'out' } : r));
+    }
+  }, [reveal, liveLotId, liveBids]);
 
   // Track each team's previous purse so the footer can float a "−1,200" delta.
   // Read during render (holds last render's values), updated after commit.
@@ -179,6 +251,7 @@ export default function ScreenPage() {
     <div
       className="scr-page"
       data-view={view}
+      data-reveal={reveal?.phase}
       style={vars({
         '--tier': tierColor,
         '--tier-rgb': rgbTriplet(tierColor),
@@ -223,7 +296,7 @@ export default function ScreenPage() {
             className={`scr-sound${muted ? ' muted' : ''}`}
             onClick={toggleMuted}
             aria-pressed={!muted}
-            aria-label={muted ? 'Sounds are off — click to turn on the bid and SOLD sounds' : 'Sounds are on — click to mute the bid and SOLD sounds'}
+            aria-label={muted ? 'Sounds are off — click to turn the auction sounds on' : 'Sounds are on — click to mute the auction sounds'}
             title={muted ? 'Sounds off' : 'Sounds on'}
           >
             {muted ? '🔇' : '🔔'}
@@ -254,6 +327,7 @@ export default function ScreenPage() {
       )}
 
       {flash && <FlashOverlay key={flash.id} flash={flash} />}
+      {reveal && <RevealOverlay key={reveal.id} reveal={reveal} />}
     </div>
   );
 }
@@ -379,6 +453,16 @@ function PlayerPanel({ player, players, tier, children }: {
  * In the accelerated round: how many unsold players are still to come.
  */
 function LotContext({ state, player, tier }: { state: StateView; player: PlayerView; tier?: Tier }) {
+  const { parts, alert } = lotContext(state, player, tier);
+  return (
+    <div className="scr-lotline">
+      {parts.map((p) => <span key={p}>{p}</span>)}
+      {alert && <span className="alert">{alert}</span>}
+    </div>
+  );
+}
+
+function lotContext(state: StateView, player: PlayerView, tier?: Tier): { parts: string[]; alert: string | null } {
   const parts: string[] = [];
   let alert: string | null = null;
   if (state.stage === 'accelerated') {
@@ -399,12 +483,7 @@ function LotContext({ state, player, tier }: { state: StateView; player: PlayerV
       else if (n + hammers - 1 <= state.players.length) parts.push(`Timeout after player ${n + hammers - 1}`);
     }
   }
-  return (
-    <div className="scr-lotline">
-      {parts.map((p) => <span key={p}>{p}</span>)}
-      {alert && <span className="alert">{alert}</span>}
-    </div>
-  );
+  return { parts, alert };
 }
 
 function BidFeed({ state, lot }: { state: StateView; lot: LotView }) {
@@ -935,6 +1014,64 @@ function FlashOverlay({ flash }: { flash: FlashInfo }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------- new-player reveal ---------------- */
+
+/** The broadcast-style intro for a freshly drawn player. Every beat is a CSS
+ *  delay inside this one mount (screen.css, .scr-reveal); JS only switches it
+ *  to 'out' and unmounts it. The name rises letter by letter, each word kept
+ *  whole so a long name breaks between words. */
+function RevealOverlay({ reveal }: { reveal: RevealInfo }) {
+  const { player, tier } = reveal;
+  const words = player.name.trim().split(/\s+/);
+  const letters = words.join('').length;
+  let i = 0;
+  return (
+    <div
+      className={`scr-reveal${reveal.phase === 'out' ? ' out' : ''}`}
+      style={vars({
+        '--rv': tier?.color ?? 'var(--scr-mark)',
+        '--rv-scale': Math.min(1, 8 / Math.max(8, letters + words.length - 1)),
+      })}
+      role="status"
+      aria-label={`Now on the block: ${player.name}`}
+    >
+      <div className="scr-reveal-stage" aria-hidden />
+      <div className="scr-reveal-word" aria-hidden>{tier?.name ?? 'Next up'}</div>
+      <div className="scr-reveal-body" aria-hidden>
+        <div className="scr-reveal-photo">
+          <i className="scr-reveal-shock" />
+          <PlayerPhoto url={player.photoUrl} name={player.name} size="xl" />
+        </div>
+        <div className="scr-reveal-text">
+          <div className="scr-reveal-eyebrow">Now on the block</div>
+          <div className="scr-reveal-name">
+            {words.map((w, wi) => (
+              <span key={wi}>
+                {wi > 0 && ' '}
+                <span className="w">
+                  {w.split('').map((ch) => {
+                    const n = i++;
+                    return <span key={n} className="ch" style={vars({ '--i': n })}>{ch}</span>;
+                  })}
+                </span>
+              </span>
+            ))}
+          </div>
+          <i className="scr-reveal-rule" />
+          <div className="scr-reveal-chips">
+            {tier && <span className="scr-tierchip" style={{ color: tier.color, borderColor: tier.color }}>{tier.name}</span>}
+            {player.role && <span className="scr-rolechip">{player.role}</span>}
+            <span className="scr-basechip">Base {fmt(player.basePrice)}</span>
+          </div>
+          <div className="scr-reveal-line">{reveal.line}</div>
+        </div>
+      </div>
+      {/* last, so the wipe crosses over everything and uncovers it */}
+      <div className="scr-reveal-panel" aria-hidden />
     </div>
   );
 }

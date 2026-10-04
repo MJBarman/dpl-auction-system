@@ -959,6 +959,176 @@
   100% { transform: translate3d(var(--dx), 118vh, 0) rotate(var(--rot)); opacity: 0; }
 }
 
+/* ---------- NEW PLAYER reveal (keyed-by: lot event) ----------
+   Plays when the auctioneer puts a new player up while the screen watches —
+   never on a reload, never on an undo. Every beat is a delay inside this one
+   mount, in step with the new-player sound (sound.ts scheduleDraw: the whoosh,
+   then the hit at 400ms). Timeline:
+   0-160 the stage dips to black (the lot view waits hidden underneath) ·
+   0-240 tier panel wipes in (a white edge leads) ·
+   240-560 the panel wipes off, uncovering left to right ·
+   300-900 photo guillotine · 330 "Now on the block" plate · 400 the hit: the
+   name rises letter by letter and a square shock rings the photo · 300 base
+   bar and 640 the rule draw across · 760-980 chips and the lot line rise ·
+   1900 (ScreenPage REVEAL_HOLD_MS) — or the first bid — the reveal lifts away
+   in 420ms and the lot view underneath plays its own entry. */
+.scr-reveal {
+  position: fixed; inset: 0; z-index: 72;
+  overflow: hidden;
+}
+.scr-reveal.out { animation: scrRevealLift 420ms cubic-bezier(0.7, 0, 0.84, 0) both; }
+@keyframes scrRevealLift { to { transform: translateY(-100%); } }
+/* the tier bar along the bottom edge: draws in, then leads the lift */
+.scr-reveal::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+  height: clamp(6px, 1vh, 12px);
+  background: var(--rv);
+  transform-origin: left center;
+  animation: scrRevealRule 600ms var(--ease-out) 300ms both;
+}
+.scr-reveal-stage {
+  position: absolute; inset: 0;
+  background: var(--bg-0);
+  animation: scrFadeIn 160ms linear both;
+}
+/* the tier name, huge and outlined, drifting slowly behind the player */
+.scr-reveal-word {
+  position: absolute; left: 0; top: 50%;
+  font-family: var(--font-display);
+  font-size: clamp(160px, 34vw, 640px); line-height: 1;
+  letter-spacing: 4px; text-transform: uppercase; white-space: nowrap;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--rv);
+  opacity: 0.2;
+  transform: translate(-10vw, -50%);
+  animation: scrFadeIn 500ms var(--ease-out) 260ms both, scrRevealDrift 2400ms linear 260ms both;
+  pointer-events: none;
+}
+@keyframes scrRevealDrift {
+  from { transform: translate(6vw, -50%); }
+  to   { transform: translate(-10vw, -50%); }
+}
+.scr-reveal-body {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  gap: clamp(28px, 4vw, 72px);
+  padding: 0 6vw 3vh;
+}
+.scr-reveal-photo { position: relative; flex: none; }
+.scr-reveal-photo .player-photo.xl {
+  display: flex;
+  width: clamp(170px, min(24vw, 44vh), 400px);
+  height: clamp(170px, min(24vw, 44vh), 400px);
+  border: none; border-radius: 0;
+  font-size: clamp(64px, 8vw, 140px);
+  animation: scrRevealPhoto 600ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
+}
+@keyframes scrRevealPhoto {
+  from { clip-path: inset(0 0 100% 0); transform: scale(1.1); }
+  to   { clip-path: inset(0 0 0 0); transform: scale(1); }
+}
+.scr-reveal-shock { /* rings out on the hit */
+  position: absolute; inset: -12px; z-index: 1;
+  border: 3px solid var(--rv);
+  pointer-events: none;
+  animation: scrRevealShock 640ms ease-out 400ms both;
+}
+@keyframes scrRevealShock {
+  0%   { opacity: 0; transform: scale(0.9); }
+  1%   { opacity: 1; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(1.45); }
+}
+.scr-reveal-text {
+  flex: 0 1 auto; min-width: 0; max-width: 56vw;
+  display: flex; flex-direction: column; align-items: flex-start;
+}
+.scr-reveal-eyebrow {
+  padding: clamp(4px, 0.7vh, 8px) clamp(10px, 1vw, 16px);
+  background: var(--hi); color: var(--bg-0);
+  font-weight: 700; font-size: clamp(13px, min(1.4vw, 2.4vh), 22px);
+  letter-spacing: 0.28em; text-transform: uppercase;
+  animation: scrChipWipe 420ms var(--ease-out) 330ms both;
+}
+.scr-reveal-name {
+  margin-top: clamp(10px, 1.6vh, 18px);
+  font-family: var(--font-display);
+  font-size: calc(clamp(64px, min(10.5vw, 19vh), 190px) * var(--rv-scale, 1));
+  line-height: 0.92; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--hi);
+}
+/* each word is a mask; its letters rise into it from below */
+.scr-reveal-name .w { display: inline-block; overflow: hidden; white-space: nowrap; vertical-align: top; padding: 0.06em 0 0.03em; }
+.scr-reveal-name .ch {
+  display: inline-block;
+  animation: scrRevealChar 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(400ms + var(--i) * 34ms);
+}
+@keyframes scrRevealChar {
+  from { transform: translateY(108%); }
+  to   { transform: translateY(0); }
+}
+.scr-reveal-rule {
+  display: block;
+  width: clamp(120px, 22vw, 380px); height: clamp(5px, 0.8vh, 9px);
+  margin: clamp(10px, 2vh, 22px) 0;
+  background: var(--rv);
+  transform-origin: left center;
+  animation: scrRevealRule 500ms var(--ease-out) 640ms both;
+}
+@keyframes scrRevealRule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.scr-reveal-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.scr-reveal-chips > span {
+  font-size: clamp(14px, min(1.5vw, 2.6vh), 24px);
+  padding: clamp(5px, 0.8vh, 9px) clamp(10px, 1.1vw, 18px);
+  animation: scrChipRise 380ms var(--ease-out) both;
+}
+.scr-reveal-chips > span:nth-child(1) { animation-delay: 760ms; }
+.scr-reveal-chips > span:nth-child(2) { animation-delay: 830ms; }
+.scr-reveal-chips > span:nth-child(3) { animation-delay: 900ms; }
+.scr-reveal-line {
+  margin-top: clamp(10px, 1.6vh, 16px);
+  font-weight: 700; font-size: clamp(12px, min(1.3vw, 2.2vh), 20px);
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--mid);
+  animation: scrChipRise 380ms var(--ease-out) 980ms both;
+}
+/* the wipe: a flat tier-colour panel with a white (black in light) edge
+   leading it in, then trailing it out as it uncovers the stage */
+.scr-reveal-panel {
+  position: absolute; inset: 0; z-index: 2;
+  background: var(--rv);
+  transform: translateX(-102%);
+  animation: scrRevealPanel 560ms cubic-bezier(0.77, 0, 0.18, 1) both;
+}
+.scr-reveal-panel::before, .scr-reveal-panel::after {
+  content: '';
+  position: absolute; top: 0; bottom: 0; width: 1.4vw;
+  background: var(--hi);
+}
+.scr-reveal-panel::before { right: 100%; }
+.scr-reveal-panel::after { left: 100%; }
+@keyframes scrRevealPanel {
+  0%   { transform: translateX(-102%); }
+  43%  { transform: translateX(0); }
+  50%  { transform: translateX(0); }
+  100% { transform: translateX(102%); }
+}
+/* While the reveal plays, the lot view under it waits hidden at its first
+   frame; its own entry animations run as the reveal lifts away. */
+.scr-page[data-reveal='in'] .scr-lot { visibility: hidden; }
+.scr-page[data-reveal='in'] .scr-lot,
+.scr-page[data-reveal='in'] .scr-lot *,
+.scr-page[data-reveal='in'] .scr-lot *::before,
+.scr-page[data-reveal='in'] .scr-lot *::after { animation-play-state: paused; }
+/* spectators on a phone: one centred column */
+@media (max-width: 760px) {
+  .scr-reveal-body { flex-direction: column; gap: 16px; padding: 0 6vw 4vh; text-align: center; }
+  .scr-reveal-text { align-items: center; max-width: 100%; }
+  .scr-reveal-photo .player-photo.xl { width: clamp(130px, 40vw, 220px); height: clamp(130px, 40vw, 220px); }
+  .scr-reveal-name { font-size: calc(clamp(44px, 14vw, 96px) * var(--rv-scale, 1)); }
+  .scr-reveal-chips { justify-content: center; }
+}
+
 /* ---------- strategic timeout board (keyed-by: stage) ---------- */
 .scr-timeout { width: 100%; }
 .scr-to-top { display: flex; flex-direction: column; align-items: center; }
@@ -1154,6 +1324,8 @@
   }
   .scr-confetti { display: none; }
   .scr-flash { opacity: 1; }
+  /* the new-player reveal is pure motion: the lot view itself says who is up */
+  .scr-reveal { display: none !important; }
   /* one-shot flourishes whose keyframes end invisible would otherwise sit at
      full opacity: a box round the amount, bars on the edges, and a white layer
      over the SOLD card */

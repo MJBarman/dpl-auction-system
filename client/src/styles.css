@@ -1547,7 +1547,141 @@ details > summary:active { background-color: var(--ad-hover); }
 
 
 /* =============================================================================
-   19. Reduced motion: no decorative movement; the hold-to-bid fill keeps its
+   19. Motion — short and decisive (HANDOFF §3.6): about 300ms on --ad-ease,
+       no bounce. Entry animations only. They play when an element mounts, and
+       the markup keys what should replay: a new lot remounts its card, a new
+       bid its amount, a new leader its line, a purse that moved its number.
+       Rules of thumb kept here:
+       - fill backwards, never forwards: a filling transform would make the
+         element the containing block of any fixed modal inside it;
+       - nothing slides in from the right, where it would widen the page on a
+         phone for a moment, and nothing moves vertically inside a sideways
+         scroller (tabs, stage bar, tables), which would flash a scrollbar;
+       - no letter-spacing tweens on text that can wrap (the line count would
+         jump mid-animation).
+   ========================================================================== */
+@keyframes adRise { from { opacity: 0; transform: translateY(16px); } }
+@keyframes adSlide { from { opacity: 0; transform: translateX(-14px); } }
+@keyframes adWipe { from { clip-path: inset(0 100% 0 0); } }
+@keyframes adNameIn { from { opacity: 0; clip-path: inset(0 100% 0 0); transform: translateX(-12px); } }
+@keyframes adPhoto { from { clip-path: inset(0 0 100% 0); transform: scale(1.08); } }
+@keyframes adNum { from { opacity: 0; transform: translateY(40%); } }
+@keyframes adBid {
+  0%  { opacity: 0; transform: translateY(0.2em) scale(1.14); }
+  60% { opacity: 1; transform: none; }
+}
+@keyframes adLotWipe {
+  0%   { transform: scaleX(0); transform-origin: left center; }
+  44%  { transform: scaleX(1); transform-origin: left center; }
+  45%  { transform: scaleX(1); transform-origin: right center; }
+  100% { transform: scaleX(0); transform-origin: right center; }
+}
+
+/* cards rise in, one column at a time in a short cascade */
+.card { animation: adRise 380ms var(--ad-ease) backwards; }
+:where(.live-grid > div, .console-left, .console-right, .landing-cards, .admin-main > div) > .card:nth-child(2) { animation-delay: 70ms; }
+:where(.live-grid > div, .console-left, .console-right, .landing-cards, .admin-main > div) > .card:nth-child(3) { animation-delay: 140ms; }
+:where(.live-grid > div, .console-left, .console-right, .landing-cards, .admin-main > div) > .card:nth-child(n + 4) { animation-delay: 210ms; }
+.notice { animation: adRise 320ms var(--ad-ease) backwards; }
+/* A modal (rendered in place, no portal) opened while its card or tab is
+   still animating in would be laid out inside that box until the animation
+   ends. Opening one ends its containers' entrance on the spot. */
+:is(.card, .admin-main > *, .team-main > *):has(.modal-backdrop) { animation: none; }
+
+/* A new player: a flat tier-colour panel crosses the lot card (the colour
+   rides in on --tier, ink when tier names are hidden) and uncovers the photo,
+   tags, name, bid box, stats and the bid button as they cascade in. It all
+   lands inside the bid button's 700ms "Get ready…" lock (TeamPage ARM_MS). */
+.lot-card { position: relative; animation: fadeIn 160ms var(--ad-ease) backwards; }
+.lot-card::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 6;
+  background: var(--tier, var(--ad-text));
+  transform: scaleX(0);
+  pointer-events: none;
+  animation: adLotWipe 560ms cubic-bezier(0.77, 0, 0.18, 1) both;
+}
+.lot-card .lot-id > .player-photo { animation: adPhoto 560ms cubic-bezier(0.16, 1, 0.3, 1) 220ms backwards; }
+.lot-card .lot-id > div > :is(.tier-badge, .player-badges) { animation: adWipe 380ms var(--ad-ease) 240ms backwards; }
+.lot-card .lot-name { animation: adNameIn 520ms var(--ad-ease) 260ms backwards; }
+.lot-card .lot-id > div > .muted { animation: adRise 360ms var(--ad-ease) 320ms backwards; }
+.lot-card .lot-bid-box { animation: adRise 420ms var(--ad-ease) 280ms backwards; }
+.lot-card .stat-group { animation: adRise 380ms var(--ad-ease) 340ms backwards; }
+.lot-card .stat-group:nth-child(2) { animation-delay: 400ms; }
+.lot-card .stat-group:nth-child(3) { animation-delay: 460ms; }
+.lot-card > .notes { animation: adRise 380ms var(--ad-ease) 480ms backwards; }
+.lot-card .hold-dock { animation: fadeIn 360ms var(--ad-ease) 380ms backwards; }
+
+/* every bid: the amount lands with a short slam; a new leader slides in */
+.lot-bid-amount { animation: adBid 380ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.lot-bid-team { animation: adSlide 320ms var(--ad-ease) backwards; }
+.hammer-timer { animation: adNum 300ms var(--ad-ease) backwards; }
+/* bid history and top sales: only the newest row mounts, so only it slides in */
+.bid-row { animation: adSlide 320ms var(--ad-ease) backwards; }
+/* the captain's money bar: a number flips up whenever it changes */
+.money-value { animation: adNum 420ms var(--ad-ease) backwards; }
+
+/* section tabs: the underline draws in under the active tab */
+nav.tabs .tab { position: relative; }
+nav.tabs .tab::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: var(--ad-text);
+  transform: scaleX(0);
+  transition: transform var(--ad-dur) var(--ad-ease);
+}
+nav.tabs .tab.active { box-shadow: none; }
+nav.tabs .tab.active::after { transform: scaleX(1); }
+
+/* stage bar and table rows: wipes and fades only (they sit in sideways scrollers) */
+.stagebar > * { animation: adWipe 360ms var(--ad-ease) backwards; }
+.stagebar > :nth-child(2) { animation-delay: 50ms; }
+.stagebar > :nth-child(3) { animation-delay: 100ms; }
+.stagebar > :nth-child(n + 4) { animation-delay: 150ms; }
+.table tbody tr { animation: fadeIn 320ms var(--ad-ease) backwards; }
+.table tbody tr:nth-child(2) { animation-delay: 30ms; }
+.table tbody tr:nth-child(3) { animation-delay: 60ms; }
+.table tbody tr:nth-child(4) { animation-delay: 90ms; }
+.table tbody tr:nth-child(5) { animation-delay: 120ms; }
+.table tbody tr:nth-child(6) { animation-delay: 150ms; }
+.table tbody tr:nth-child(7) { animation-delay: 180ms; }
+.table tbody tr:nth-child(n + 8) { animation-delay: 210ms; }
+
+/* the top bar's name slides in with each page */
+.topbar .brand { animation: adSlide 420ms var(--ad-ease) backwards; }
+
+/* landing: the title, the line under it, the stage strip, then the cards */
+.landing-title-row h1 { animation: adRise 520ms var(--ad-ease) backwards; }
+.landing-hero > p.muted { animation: adRise 420ms var(--ad-ease) 120ms backwards; }
+.landing-hero > .stage-banner { animation: adWipe 520ms var(--ad-ease) 220ms backwards; }
+.landing-cards > .card:nth-child(1) { animation-delay: 200ms; }
+.landing-cards > .card:nth-child(2) { animation-delay: 270ms; }
+.landing-cards > .card:nth-child(3) { animation-delay: 340ms; }
+.landing-foot { animation: fadeIn 420ms var(--ad-ease) 480ms backwards; }
+
+/* the big CTAs: the long arrow steps forward on hover (adidas "GET STARTED →") */
+.btn.primary.big, .btn.ok.big:not(.grow) {
+  transition:
+    background-color var(--ad-dur) var(--ad-ease),
+    border-color var(--ad-dur) var(--ad-ease),
+    color var(--ad-dur) var(--ad-ease),
+    transform var(--ad-dur-fast) var(--ad-ease),
+    background-position var(--ad-dur) var(--ad-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn.primary.big:hover:not(:disabled), .btn.ok.big:not(.grow):hover:not(:disabled) { background-position: right 10px center; }
+}
+
+/* the console on a phone opens the lot card up into the page flow
+   (display: contents), so there is no card box for the wipe to cross */
+@media (max-width: 900px) {
+  .console-left > .lot-card::after { content: none; }
+}
+
+
+/* =============================================================================
+   20. Reduced motion: no decorative movement; the hold-to-bid fill keeps its
        linear sweep because it is the only feedback on how long to hold.
        (The projector has its own block in screen.css.)
    ========================================================================== */

@@ -7,8 +7,8 @@ import { useApp } from '../store';
 import { PlayerView, StateView, TeamView, WatchlistEntry } from '../types';
 import {
   auctionRules, BidSoundToggle, ConnectionDot, fmt, formatClock, lastTeamBuying, maxBidLine, Modal, OfflineBanner,
-  PlayerBadges, PlayerPhoto, StatsGrid, TEAM_BID_MUTE_KEY, ThemeToggle, TierBadge, TIMEOUT_COUNTDOWN_MS, useAction,
-  useBidSound, useCountdown, useSoldSound,
+  PlayerBadges, PlayerPhoto, StatsGrid, TEAM_BID_MUTE_KEY, ThemeToggle, TierBadge, tierFor, TIMEOUT_COUNTDOWN_MS,
+  useAction, useBidSound, useCountdown, useDrawSound, useSoldSound,
 } from '../ui';
 
 export default function TeamPage() {
@@ -25,10 +25,12 @@ export default function TeamPage() {
     if (state && state.you.role !== 'team') refresh();
   }, [state?.you.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The bid chime and the SOLD gavel on the captain's phone too, with this
-  // device's own mute. Called before the early returns so hook order stays stable.
+  // The new-player sound, the bid chime and the SOLD gavel on the captain's
+  // phone too, with this device's own mute. Called before the early returns so
+  // hook order stays stable.
   const { muted, toggleMuted } = useBidSound(state?.lot ?? null, TEAM_BID_MUTE_KEY);
   useSoldSound(state, muted);
+  useDrawSound(state, muted);
 
   if (!session || session.role !== 'team') return null;
   if (!state) return <div className="page-loading">Connecting…</div>;
@@ -89,20 +91,21 @@ function MoneyBar({ state, teamId }: { state: StateView; teamId: string }) {
   const slotsLeft = Math.max(0, state.settings.minSquad - team.count);
   return (
     <div className="money-bar">
+      {/* each value is keyed by itself, so it flips up whenever it changes */}
       <div className="money-cell">
-        <div className="money-value">{fmt(team.remaining)}</div>
+        <div className="money-value" key={team.remaining}>{fmt(team.remaining)}</div>
         <div className="money-label">Remaining</div>
       </div>
       <div className="money-cell">
-        <div className="money-value">{fmt(team.spent)}</div>
+        <div className="money-value" key={team.spent}>{fmt(team.spent)}</div>
         <div className="money-label">Spent</div>
       </div>
       <div className="money-cell">
-        <div className="money-value">{team.count}<span className="muted">/{state.settings.maxSquad}</span></div>
+        <div className="money-value" key={team.count}>{team.count}<span className="muted">/{state.settings.maxSquad}</span></div>
         <div className="money-label">Squad{slotsLeft > 0 ? ` (${slotsLeft} more needed)` : ''}</div>
       </div>
       <div className="money-cell accent">
-        <div className="money-value">{team.full ? '—' : fmt(team.maxBid)}</div>
+        <div className="money-value" key={team.full ? 'full' : team.maxBid}>{team.full ? '—' : fmt(team.maxBid)}</div>
         <div className="money-label">Max next bid</div>
       </div>
     </div>
@@ -172,7 +175,13 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
           </div>
         )}
         {player && lot && (
-          <div className={`card lot-card${leading ? ' you-lead' : ''}`}>
+          // keyed-by: lot — a new player remounts the card, so it pops in fresh
+          // (styles.css "Motion"); the bid button re-arms the same way.
+          <div
+            key={lot.id}
+            className={`card lot-card${leading ? ' you-lead' : ''}`}
+            style={{ ['--tier' as any]: (state.settings.showTier !== false && tierFor(state, player.tierKey)?.color) || undefined }}
+          >
             <div className="lot-head">
               <div className="lot-id">
                 <PlayerPhoto url={player.photoUrl} name={player.name} size="md" />
@@ -190,8 +199,8 @@ function LiveTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
               </div>
               <div className="lot-bid-box">
                 {timer !== null && <div className={`hammer-timer${timer <= 3 ? ' urgent' : ''}`}>{timer}s</div>}
-                <div className="lot-bid-amount">{lot.currentBid !== null ? fmt(lot.currentBid) : `Opens at ${fmt(player.basePrice)}`}</div>
-                <div className="lot-bid-team">
+                <div className="lot-bid-amount" key={lot.currentBid ?? 'open'}>{lot.currentBid !== null ? fmt(lot.currentBid) : `Opens at ${fmt(player.basePrice)}`}</div>
+                <div className="lot-bid-team" key={lot.leadingTeamId ?? 'none'}>
                   {leading
                     ? <><Icon name="check" /> YOU are leading</>
                     : lot.leadingTeamId
