@@ -254,6 +254,7 @@ body {
   background: var(--ad-page);
   color: var(--ad-text);
   font: var(--ad-body-m);
+  line-height: 1.5;                       /* unitless, so larger type never inherits a fixed 24px line */
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1393,7 +1394,8 @@ details > summary:active { background-color: var(--ad-hover); }
     text-align: left;
     border-top: 1px solid var(--ad-divider);
   }
-  .lot-bid-box > .lot-bid-amount { grid-column: 1; grid-row: 1; font-size: clamp(36px, 11vw, 48px); }
+  .lot-bid-box > .lot-bid-amount { grid-column: 1; grid-row: 1; font-size: clamp(36px, 11vw, 48px); line-height: 1; white-space: normal; text-wrap: balance; }
+  /* (only "Opens at 400" can wrap: amounts have no spaces) */
   .lot-bid-box > .lot-bid-team { grid-column: 1; grid-row: 2; justify-self: start; }
   .lot-bid-box > .hammer-timer { grid-column: 2; grid-row: 1 / span 2; margin: 0; font-size: 40px; }
 

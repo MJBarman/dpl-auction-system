@@ -1,13 +1,17 @@
 /* ============================================================================
-   PROJECTOR SCREEN — "HAMMER TIME" broadcast package
+   PROJECTOR SCREEN — the adidas Running look at broadcast scale
    Loaded only by ScreenPage. Key discipline (enforced in ScreenPage.tsx):
      keyed-by: player  → replays once per lot (photo reveal, name, stat cascade)
      keyed-by: bid     → replays on every amount change (slam, shockwave)
      keyed-by: team    → replays on lead change only (takeover wipe, shudder, edge flash)
      keyed-by: event   → SOLD/UNSOLD overlay, unique id per hammer event
-     stable            → ambient loops that must NEVER restart (beams, grid, ticker)
+     stable            → elements that must NEVER restart (ticker, purse cells)
    Every entry animation starts at a keyframe offset and ends at the element's
    natural state, so an interrupted or reduced-motion render is always legible.
+   The language: flat black or white arena, square plates, condensed uppercase
+   type, monochrome money, mint only for the ring and the SOLD moment. Looping
+   decoration (beams, grid pan, sheen, shimmer, glows) is gone; event motion
+   (slam, wipe, row-in, purse flip, SOLD) stays.
    ========================================================================== */
 
 .scr-page {
@@ -39,84 +43,28 @@
   --live-off: var(--ad-red);
   --font-display: var(--ad-font-display);
   --font-body: var(--ad-font-body);
+  --font-cond: var(--ad-font-heading);
   --ease-out: var(--ad-ease);
   --ease-pop: var(--ad-ease);      /* no overshoot: adidas motion is decisive, not bouncy */
   --ease-wipe: var(--ad-ease);
+  --scr-mark: var(--ad-run-mint);  /* the brand bar: mint on black, black on white */
 
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow: hidden;
   background: var(--bg-0);
   color: var(--hi);
   font-family: var(--font-body);
 }
+:root[data-theme='light'] .scr-page { --scr-mark: var(--ad-black); }
 .scr-page b { font-weight: 700; }
-/* Self-contained saturated chip that would wash out on white — the only badge
-   whose ink/fill both need re-tuning for the light arena. */
-:root[data-theme='light'] .scr-badge.sleeper {
-  background: rgba(124, 58, 237, 0.12); color: #6d28d9; border-color: #7c3aed;
-}
-/* Tier accents are tuned for the dark arena (pale amber, cyan, lavender) and
-   wash out on white wherever they colour text — darken them in place. */
-:root[data-theme='light'] .scr-tierchip,
-:root[data-theme='light'] .scr-cat-head .tname,
-:root[data-theme='light'] .scr-hot-row .hmeta span,
-:root[data-theme='light'] .scr-idle-headline .tier { filter: brightness(0.62) saturate(1.4); }
 
-/* ---------- ambient arena (stable — never remounts) ---------- */
-.scr-ambient { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
-.scr-ambient::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: radial-gradient(120% 90% at 50% 0%, var(--ambient-top) 0%, var(--bg-0) 62%);
-}
-.scr-beam {
-  position: absolute;
-  width: 170vmax; height: 170vmax;
-  top: 110%; left: 50%;
-  transform: translate(-50%, -50%);
-  will-change: transform;
-}
-.scr-beam.a {
-  background: conic-gradient(from 0deg,
-    transparent 0deg 128deg, rgba(var(--tier-rgb), 0.07) 145deg, transparent 162deg,
-    transparent 198deg, rgba(var(--tier-rgb), 0.07) 215deg, transparent 232deg 360deg);
-  animation: scrBeamSpin 90s linear infinite;
-}
-.scr-beam.b {
-  background: conic-gradient(from 60deg,
-    transparent 0deg 150deg, rgba(var(--tex), 0.045) 168deg, transparent 186deg 360deg);
-  animation: scrBeamSpin 140s linear infinite reverse;
-}
-@keyframes scrBeamSpin {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to   { transform: translate(-50%, -50%) rotate(360deg); }
-}
-.scr-gridlines {
-  position: absolute; inset: -50% -50% 0 0;
-  background: repeating-linear-gradient(115deg,
-    rgba(var(--tex), 0.028) 0 1px, transparent 1px 90px);
-  animation: scrGridPan 60s linear infinite;
-}
-@keyframes scrGridPan {
-  from { transform: translate3d(-90px, -90px, 0); }
-  to   { transform: translate3d(0, 0, 0); }
-}
-/* the whole arena quietly leans toward the leading franchise (no remount) */
-.scr-leadtint {
-  position: absolute; inset: 0;
-  background-color: var(--lead);
-  opacity: var(--lead-on, 0);
-  -webkit-mask-image: radial-gradient(70% 60% at 50% 42%, #000, transparent 72%);
-  mask-image: radial-gradient(70% 60% at 50% 42%, #000, transparent 72%);
-  transition: background-color 900ms ease, opacity 900ms ease;
-}
-.scr-vignette {
-  position: absolute; inset: 0;
-  background: radial-gradient(ellipse at center, transparent 55%, var(--vignette) 100%);
-}
+/* ---------- arena: flat, no decoration (the elements stay mounted) ---------- */
+.scr-ambient { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: var(--bg-0); }
+.scr-beam, .scr-gridlines, .scr-leadtint, .scr-vignette { display: none; }
 
 .scr-page > header, .scr-page > main, .scr-page > footer, .scr-page > .offline-banner {
   position: relative; z-index: 1;
@@ -126,78 +74,82 @@
 .scr-head {
   display: flex; align-items: center; justify-content: space-between; gap: 18px;
   height: 68px; padding: 0 26px;
-  background: linear-gradient(180deg, var(--head-1), var(--head-2));
+  background: var(--bg-0);
   border-bottom: 1px solid var(--line);
   position: relative; overflow: hidden;
 }
-.scr-head::after { /* broadcast sheen every 20s */
-  content: '';
-  position: absolute; top: 0; bottom: 0; left: 0; width: 220px;
-  background: linear-gradient(105deg, transparent, rgba(var(--tex), 0.05), transparent);
-  animation: scrSheen 20s linear infinite;
-  pointer-events: none;
-}
-@keyframes scrSheen {
-  0%, 93% { transform: translateX(-260px); }
-  100% { transform: translateX(calc(100vw + 40px)); }
-}
 .scr-brand {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 14px; line-height: 1.1;
   font-family: var(--font-display);
   font-size: clamp(16px, 2vw, 26px);
-  letter-spacing: 0.04em; text-transform: uppercase;
+  letter-spacing: 2px; text-transform: uppercase;
   text-decoration: none; color: var(--hi); white-space: nowrap;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
-.scr-brand-bar {
-  width: 6px; height: 30px; flex: none;
-  background: linear-gradient(180deg, var(--gold-hi), var(--gold));
-}
+.scr-brand-bar { width: 6px; height: 30px; flex: none; background: var(--scr-mark); }
 .scr-stagechip { /* keyed-by: stage+tier — wipes in on round change */
-  font-weight: 800; font-size: clamp(13px, 1.4vw, 18px);
+  font-weight: 700; font-size: clamp(13px, 1.4vw, 18px);
   letter-spacing: 0.24em; text-transform: uppercase;
-  color: var(--tier);
+  color: var(--hi);
   padding: 7px 18px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 1px solid var(--hi);
+  border-left: 4px solid var(--tier);
   animation: scrChipWipe 420ms var(--ease-out) both;
   white-space: nowrap;
 }
-.scr-stagechip[data-stage='accelerated'] { color: var(--gold); }
-.scr-stagechip[data-stage='completed'] { color: var(--mid); }
-.scr-stagechip[data-stage='timeout'] { color: var(--gold); border-color: var(--gold-deep); }
+.scr-stagechip[data-stage='accelerated'],
+.scr-stagechip[data-stage='timeout'] { border-color: var(--ad-orange); }
+.scr-stagechip[data-stage='completed'] { color: var(--mid); border-color: var(--line); border-left-color: var(--mid); }
 @keyframes scrChipWipe {
   from { clip-path: inset(0 100% 0 0); opacity: 0; }
   to   { clip-path: inset(0 0 0 0); opacity: 1; }
 }
-.scr-head-right { display: flex; align-items: center; gap: 14px; }
+.scr-head-right { display: flex; align-items: center; gap: 12px; }
+/* theme and sound: 42px ghost icon buttons; the emoji stay as the content,
+   the visible mark is a thin-line icon (the buttons carry aria-labels) */
 .scr-sound, .scr-theme {
+  position: relative;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 42px; height: 42px; flex: none;
-  font-size: 19px; line-height: 1; cursor: pointer;
-  color: var(--hi);
-  background: var(--bg-2);
+  width: 42px; height: 42px; flex: none; padding: 0;
+  font-size: 0; line-height: 0; color: var(--hi);
+  cursor: pointer;
+  background: transparent;
   border: 1px solid var(--line);
-  border-radius: 11px;
-  transition: filter 0.12s, opacity 0.12s, border-color 0.12s;
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: background-color 300ms var(--ad-ease), border-color 300ms var(--ad-ease), opacity 300ms var(--ad-ease);
 }
-.scr-sound:hover, .scr-theme:hover { filter: brightness(1.3); }
-.scr-sound:not(.muted) { border-color: rgba(74, 222, 128, 0.5); }
+.scr-sound::before, .scr-theme::before {
+  content: ''; width: 20px; height: 20px;
+  background-color: currentColor;
+  -webkit-mask: var(--i-sun) center / 20px no-repeat;
+  mask: var(--i-sun) center / 20px no-repeat;
+}
+.scr-theme[aria-pressed='true']::before { -webkit-mask-image: var(--i-moon); mask-image: var(--i-moon); }
+.scr-sound::before { -webkit-mask-image: var(--i-bell); mask-image: var(--i-bell); }
+.scr-sound.muted::before { -webkit-mask-image: var(--i-bell-off); mask-image: var(--i-bell-off); }
+.scr-sound:not(.muted) { border-color: var(--live); }
 .scr-sound.muted { opacity: 0.5; }
+.scr-sound:active, .scr-theme:active { background-color: var(--ad-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .scr-sound:hover, .scr-theme:hover { background-color: var(--ad-hover); }
+}
 .scr-live {
   display: flex; align-items: center; gap: 12px;
-  font-weight: 800; font-size: 17px; letter-spacing: 0.3em;
+  font-weight: 700; font-size: 17px; letter-spacing: 0.3em;
   color: var(--live);
 }
 .scr-live.off { color: var(--live-off); }
 .scr-live-dot { position: relative; width: 12px; height: 12px; flex: none; }
 .scr-live-dot::before {
   content: '';
-  position: absolute; inset: 0; border-radius: 50%;
+  position: absolute; inset: 0;
   background: var(--live);
 }
 .scr-live.off .scr-live-dot::before { background: var(--danger); }
-.scr-live-dot i { /* radar pings */
-  position: absolute; inset: -2px; border-radius: 50%;
+.scr-live-dot i { /* radar pings, square like everything else */
+  position: absolute; inset: -2px;
   border: 2px solid var(--live);
   animation: scrPing 1.8s var(--ease-out) infinite;
 }
@@ -226,28 +178,24 @@
 .scr-lotline {
   display: flex; flex-wrap: wrap; align-items: baseline;
   margin-bottom: clamp(8px, 1.6vh, 16px);
-  font-size: clamp(11px, min(1vw, 1.9vh), 15px); font-weight: 800;
+  font-size: clamp(11px, min(1vw, 1.9vh), 15px); font-weight: 700;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--mid);
   animation: scrChipRise 380ms var(--ease-out) 80ms both;
 }
 .scr-lotline span:first-child { color: var(--hi); }
 .scr-lotline span + span::before { content: '·'; margin: 0 0.75em; color: var(--mid); }
-.scr-lotline .alert { color: var(--gold); }
+.scr-lotline .alert { color: var(--ad-warning-text); box-shadow: inset 0 -3px 0 var(--ad-orange); padding-bottom: 2px; }
 /* Photo beside the name and chips, so the three stat rows and the notes
    still fit under it on a 720p / 768p projector. */
 .scr-id-head { display: flex; align-items: center; gap: clamp(14px, 1.6vw, 26px); margin-bottom: clamp(10px, 1.8vh, 20px); }
 .scr-id-text { flex: 1; min-width: 0; }
 .scr-photo-wrap { position: relative; flex: none; }
-.scr-photo-glow { /* pre-blurred radial, no filter cost */
-  position: absolute; inset: -90px;
-  background: radial-gradient(closest-side, rgba(var(--tier-rgb), 0.20), transparent 70%);
-  pointer-events: none;
-}
-.scr-photo-frame { /* keyed-by: player — guillotine reveal */
+.scr-photo-glow { display: none; }
+.scr-photo-frame { /* keyed-by: player — guillotine reveal; the photo sits on its tile */
   position: relative;
-  padding: 4px;
-  background: linear-gradient(135deg, var(--tier), rgba(var(--tier-rgb), 0.15) 45%, var(--tier));
-  border-radius: 10px;
+  padding: 0;
+  background: none;
+  border-radius: 0;
   animation: scrPhotoReveal 550ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes scrPhotoReveal {
@@ -259,54 +207,50 @@
   /* vh cap: the three stat rows must still fit on a 720p projector */
   width: clamp(120px, min(20vw, 27vh), 300px);
   height: clamp(120px, min(20vw, 27vh), 300px);
-  border: none; border-radius: 7px;
+  border: none; border-radius: 0;
   font-size: clamp(48px, 6vw, 84px);
 }
 .scr-name { /* keyed-by: player — tracking-in */
   font-family: var(--font-display);
+  font-weight: 400;
   font-size: calc(clamp(34px, min(5vw, 8.5vh), 88px) * var(--name-scale, 1));
   line-height: 0.95; text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 2px;
   margin: 0 0 clamp(8px, 1.4vh, 14px);
   overflow-wrap: break-word;
   animation: scrNameIn 500ms var(--ease-out) 120ms both;
 }
 @keyframes scrNameIn {
-  from { letter-spacing: 0.28em; opacity: 0; transform: translateY(14px); }
-  to   { letter-spacing: 0.02em; opacity: 1; transform: translateY(0); }
+  from { letter-spacing: 0.24em; opacity: 0; transform: translateY(14px); }
+  to   { letter-spacing: 2px; opacity: 1; transform: translateY(0); }
 }
-.scr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.scr-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .scr-tierchip, .scr-rolechip, .scr-basechip, .scr-badge {
-  font-weight: 800; font-size: clamp(12px, min(1.15vw, 2.1vh), 16px);
+  font-weight: 700; font-size: clamp(12px, min(1.15vw, 2.1vh), 16px);
   letter-spacing: 0.12em; text-transform: uppercase;
   padding: clamp(3px, 0.6vh, 6px) clamp(8px, 0.9vw, 14px); white-space: nowrap;
+  border-radius: 0;
 }
-.scr-tierchip { border: 1px solid; background: rgba(var(--tier-rgb), 0.1); }
-.scr-rolechip { background: var(--bg-2); border: 1px solid var(--line); color: var(--hi); }
-.scr-basechip { background: transparent; border: 1px solid var(--gold-deep); color: var(--gold); }
-.scr-badge.hot {
-  background: #7f1d1d; color: #fecaca;
-  animation: scrHotPulse 1.2s ease-in-out infinite alternate;
-}
-@keyframes scrHotPulse {
-  from { filter: drop-shadow(0 0 0 transparent); }
-  to   { filter: drop-shadow(0 0 8px rgba(255, 61, 94, 0.7)); }
-}
-.scr-badge.sleeper { background: rgba(167, 139, 250, 0.16); color: #c4b5fd; border: 1px solid #6d28d9; }
+/* the tier colour arrives inline (colour + border): a 4px stripe, words in --hi */
+.scr-tierchip { background: var(--bg-2); border: 0 solid; border-left-width: 4px; color: var(--hi) !important; }
+.scr-rolechip { background: var(--bg-2); color: var(--hi); }
+.scr-basechip { background: transparent; border: 1px solid var(--hi); color: var(--hi); }
+.scr-badge.hot { background: var(--ad-red); color: #fff; }
+.scr-badge.sleeper { background: var(--hi); color: var(--bg-0); }
 /* MVP / Batting / Bowling rows (the category sheet's column groups): a row
    title, then five equal columns so the cells line up down the panel. */
 .scr-statgroups { display: flex; flex-direction: column; gap: clamp(5px, 0.8vh, 9px); max-width: 780px; }
 .scr-sg { display: grid; grid-template-columns: clamp(64px, 6vw, 92px) minmax(0, 1fr); gap: 8px; align-items: stretch; }
 .scr-sg-title {
   display: flex; align-items: center;
-  font-family: var(--font-display); font-size: clamp(13px, 1.3vw, 19px);
+  font-family: var(--font-cond); font-weight: 700; font-size: clamp(13px, 1.3vw, 19px);
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid);
-  border-right: 3px solid rgba(var(--tier-rgb), 0.55);
+  border-right: 2px solid var(--line);
 }
-.scr-sg-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.scr-sg-cells { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .scr-stat { /* keyed-by: player (grid remounts) — slam cascade via --i */
   background: var(--panel);
-  border-top: 1px solid rgba(var(--tier-rgb), 0.55);
+  border-top: 2px solid var(--tier);
   padding: clamp(5px, 0.9vh, 9px) 4px clamp(4px, 0.7vh, 7px); text-align: center;
   min-width: 0;
   animation: scrChipRise 380ms var(--ease-out) both;
@@ -317,7 +261,8 @@
   to   { transform: translateY(0); opacity: 1; }
 }
 .scr-stat-v {
-  font-weight: 800; font-size: clamp(17px, min(1.9vw, 3.4vh), 38px);
+  font-family: var(--font-cond);
+  font-weight: 700; font-size: clamp(17px, min(1.9vw, 3.4vh), 38px);
   font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap;
 }
 .scr-stat-l {
@@ -325,10 +270,10 @@
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid);
   margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.scr-stat-rank { color: var(--gold); font-weight: 800; }
+.scr-stat-rank { color: var(--hi); font-weight: 700; }
 .scr-sg-none {
   align-self: center; padding: 6px 2px;
-  color: var(--mid); font-size: clamp(14px, 1.3vw, 18px); font-weight: 600; font-style: italic;
+  color: var(--mid); font-size: clamp(14px, 1.3vw, 18px); font-weight: 600;
   letter-spacing: 0.04em;
   animation: scrChipRise 380ms var(--ease-out) both;
   animation-delay: calc(180ms + var(--i) * 35ms);
@@ -336,7 +281,7 @@
 .scr-debut { color: var(--mid); font-size: 17px; letter-spacing: 0.08em; font-weight: 600; }
 .scr-notes {
   color: var(--mid); font-size: clamp(14px, min(1.3vw, 2.3vh), 18px);
-  border-left: 3px solid rgba(var(--tier-rgb), 0.6);
+  border-left: 2px solid var(--line);
   padding-left: 12px; margin: 14px 0 0; max-width: 780px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
@@ -360,62 +305,58 @@
   100% { transform: translate(0, 0); }
 }
 .scr-eyebrow {
-  font-size: clamp(13px, 1.3vw, 18px); font-weight: 800;
+  font-size: clamp(13px, 1.3vw, 18px); font-weight: 700;
   letter-spacing: 0.26em; color: var(--mid); text-transform: uppercase;
   margin-bottom: 2px;
 }
 .scr-amount-wrap { position: relative; display: inline-block; }
-.scr-amount { /* keyed-by: bid — the slam */
+.scr-amount { /* keyed-by: bid — the slam (Anton: the amount changes once per bid) */
   font-family: var(--font-display);
   font-size: clamp(64px, 10vw, 168px);
   line-height: 1; letter-spacing: 0.01em;
-  background: linear-gradient(180deg, var(--gold-hi) 18%, var(--gold) 68%, var(--gold-deep));
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
-  filter: drop-shadow(0 0 22px var(--gold-glow));
+  color: var(--hi);
+  white-space: nowrap;
   animation: scrSlam 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes scrSlam {
-  0%   { transform: translateY(0.28em) scale(1.16); opacity: 0; filter: blur(8px) drop-shadow(0 0 22px var(--gold-glow)); }
-  60%  { transform: none; opacity: 1; filter: blur(0) drop-shadow(0 0 22px var(--gold-glow)); }
+  0%   { transform: translateY(0.28em) scale(1.16); opacity: 0; }
+  60%  { transform: none; opacity: 1; }
   75%  { transform: scale(0.985); }
   100% { transform: scale(1); }
 }
 .scr-shockwave { /* sibling of the keyed amount — fires with every slam */
   position: absolute; inset: -6px -18px;
-  border: 2px solid rgba(251, 191, 36, 0.65);
-  border-radius: 14px;
+  border: 2px solid var(--hi);
+  border-radius: 0;
   animation: scrShock 520ms ease-out both;
   pointer-events: none;
 }
 @keyframes scrShock {
-  from { transform: scale(0.88); opacity: 0.7; }
+  from { transform: scale(0.88); opacity: 0.5; }
   to   { transform: scale(1.45); opacity: 0; }
 }
-.scr-plate { /* the LEADING plate — parallelogram wipe in team color, a row of
-                its own under the bid and ring so a long team name never clips */
+.scr-plate { /* the LEADING plate — a flat team-colour rectangle that wipes in,
+                a row of its own under the bid and ring so a long name never clips */
   margin-top: 14px;
-  padding: 12px 34px;
+  padding: 12px 24px;
   display: inline-block;
-  clip-path: polygon(18px 0, 100% 0, calc(100% - 18px) 100%, 0 100%);
   background: var(--lead);
   color: #fff;
   font-family: var(--font-display);
   font-size: clamp(20px, 2.6vw, 38px);
-  letter-spacing: 0.05em; text-transform: uppercase;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  letter-spacing: 2px; text-transform: uppercase; line-height: 1.1;
   animation: scrPlateWipe 420ms var(--ease-wipe) both;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.scr-plate.dark-ink { color: #04060d; text-shadow: none; }
+.scr-plate.dark-ink { color: #000; }
 .scr-plate.open {
-  background: var(--bg-2); color: var(--mid);
-  border: 1px solid var(--line); text-shadow: none;
+  background: transparent; color: var(--mid);
+  border: 1px solid var(--line);
 }
 .scr-plate span { display: inline-block; animation: scrPlateText 420ms var(--ease-out) both; }
 @keyframes scrPlateWipe {
-  from { clip-path: polygon(0 0, 26px 0, 8px 100%, 0 100%); opacity: 0.4; }
-  to   { clip-path: polygon(18px 0, 100% 0, calc(100% - 18px) 100%, 0 100%); opacity: 1; }
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
 }
 @keyframes scrPlateText {
   from { transform: translateX(-26px); opacity: 0; }
@@ -426,7 +367,7 @@
   font-size: clamp(16px, 1.7vw, 24px); font-weight: 600;
   letter-spacing: 0.1em; color: var(--mid); text-transform: uppercase;
 }
-.scr-nextmin b { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
+.scr-nextmin b { color: var(--hi); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* full-viewport edge flash — keyed-by: team */
 .scr-edgeflash { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
@@ -452,7 +393,7 @@
 .scr-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .scr-ring .track { fill: none; stroke: var(--line); stroke-width: 10; }
 .scr-ring .arc {
-  fill: none; stroke: var(--gold); stroke-width: 10; stroke-linecap: round;
+  fill: none; stroke: var(--ad-ring); stroke-width: 10; stroke-linecap: butt;
   transition: stroke-dashoffset 220ms linear, stroke 300ms ease;
 }
 .scr-ring.urgent .arc { stroke: var(--danger); }
@@ -461,21 +402,24 @@
   0%, 100% { transform: scale(1); }
   40% { transform: scale(1.07); }
 }
-.scr-ring-num { /* keyed-by: second */
+.scr-ring-num { /* keyed-by: second — Barlow Condensed: tabular, so it never jitters */
   position: absolute; inset: 0;
   display: grid; place-items: center;
-  font-weight: 800; font-size: clamp(40px, 5vw, 72px);
+  font-family: var(--font-cond);
+  font-weight: 800; font-size: clamp(40px, 5vw, 72px); line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: var(--hi);
   animation: scrNumPop 220ms var(--ease-pop) both;
 }
-.scr-ring.urgent .scr-ring-num { color: var(--danger); text-shadow: 0 0 24px rgba(255, 46, 77, 0.6); }
+.scr-ring.urgent .scr-ring-num { color: var(--danger); }
 @keyframes scrNumPop {
   from { transform: scale(1.3); opacity: 0.4; }
   to   { transform: scale(1); opacity: 1; }
 }
+/* last three seconds: red bars on the top and bottom edges of the room */
 .scr-danger-vignette {
   position: fixed; inset: 0; z-index: 4; pointer-events: none;
-  background: radial-gradient(ellipse at center, transparent 58%, rgba(255, 46, 77, 0.2) 100%);
+  box-shadow: inset 0 8px 0 var(--danger), inset 0 -8px 0 var(--danger);
   animation: scrVignettePulse 1s ease-in-out infinite;
 }
 @keyframes scrVignettePulse {
@@ -486,9 +430,12 @@
 /* ---------- bid history feed ---------- */
 .scr-feed { margin-top: 22px; max-width: 560px; }
 .scr-feed.empty {
-  color: var(--mid); font-size: 18px; letter-spacing: 0.08em; font-weight: 600;
+  color: var(--mid);
+  font-family: var(--font-cond); font-size: 22px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
 }
-.scr-bid-row { /* keyed-by: absolute bid index — old rows never remount */
+.scr-bid-row { /* keyed-by: absolute bid index — old rows never remount. 46px is
+                  coupled to BidFeed's row measurement and scrRowIn below */
   display: flex; align-items: center; gap: 12px;
   height: 46px; padding: 0 14px 0 0;
   background: var(--panel);
@@ -500,14 +447,15 @@
   from { margin-top: -46px; transform: translateX(56px); opacity: 0; }
   to   { margin-top: 0; transform: translateX(0); opacity: 1; }
 }
-.scr-bid-row .bar { width: 5px; align-self: stretch; flex: none; background: var(--team); }
+.scr-bid-row .bar { width: 6px; align-self: stretch; flex: none; background: var(--team); }
 .scr-bid-row .team {
   font-weight: 700; font-size: 19px; text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .scr-bid-row .amt {
-  margin-left: auto; font-weight: 800; font-size: 21px;
-  font-variant-numeric: tabular-nums; color: var(--gold);
+  margin-left: auto;
+  font-family: var(--font-cond); font-weight: 700; font-size: 22px;
+  font-variant-numeric: tabular-nums; color: var(--hi);
 }
 .scr-bid-row:nth-child(2) { opacity: 0.8; }
 .scr-bid-row:nth-child(3) { opacity: 0.65; }
@@ -521,42 +469,28 @@
   display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 3vh, 34px);
   padding: clamp(4px, 2vh, 24px) 0;
 }
-.scr-watermark { /* stable — breathes forever */
-  position: fixed; inset: 0; z-index: 0;
-  display: grid; place-items: center;
-  font-family: var(--font-display);
-  font-size: clamp(90px, 16vw, 240px);
-  letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
-  color: rgba(var(--tex), 0.05);
-  animation: scrBreathe 6s ease-in-out infinite alternate;
-  pointer-events: none;
-}
-@keyframes scrBreathe {
-  from { transform: scale(1); opacity: 0.8; }
-  to   { transform: scale(1.03); opacity: 1; }
-}
-.scr-idle-headline { /* stable — shimmer text */
+.scr-watermark { display: none; }
+.scr-idle-headline { /* solid type; the next tier sits in an inverse highlight box */
   position: relative; z-index: 1;
   font-family: var(--font-display);
-  font-size: clamp(26px, min(4.4vw, 6.5vh), 64px);
-  letter-spacing: 0.03em; text-transform: uppercase;
-  background: linear-gradient(100deg, var(--mid) 42%, var(--hi) 50%, var(--mid) 58%);
-  background-size: 250% 100%;
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
-  animation: scrShimmer 3.5s ease-in-out infinite;
+  font-size: clamp(26px, min(4.4vw, 6.5vh), 64px); line-height: 1.15;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--hi);
+  text-wrap: balance;
+  animation: scrChipRise 420ms var(--ease-out) both;
 }
-/* "Next draw: EMERALD   10 LEFT · BASE 400" — solid inks over the shimmer */
-.scr-idle-headline .tier { -webkit-text-fill-color: var(--tc); }
+/* "Next draw: EMERALD   10 LEFT · BASE 400" */
+.scr-idle-headline .tier {
+  background: var(--hi); color: var(--bg-0);
+  padding: 0 0.15em;
+  box-shadow: inset 0 -0.12em 0 var(--tc);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
 .scr-idle-detail {
   margin-left: 0.7em;
-  font-family: var(--font-body); font-size: max(15px, 0.5em); font-weight: 800;
+  font-family: var(--font-body); font-size: max(15px, 0.5em); font-weight: 700;
   letter-spacing: 0.12em; vertical-align: 0.3em; white-space: nowrap;
-  -webkit-text-fill-color: var(--mid);
-}
-@keyframes scrShimmer {
-  from { background-position: 200% 0; }
-  to   { background-position: -50% 0; }
+  color: var(--mid);
 }
 /* idle boards: the player categories and the hot list, side by side — the
    same planning sheet both captains see on their phones */
@@ -569,79 +503,87 @@
 .scr-boards.two { width: min(1440px, 100%); grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); align-items: start; }
 .scr-board { display: flex; flex-direction: column; gap: clamp(8px, 1.4vh, 14px); min-width: 0; }
 .scr-board-title {
-  font-size: clamp(12px, 1vw, 15px); font-weight: 800; letter-spacing: 0.3em;
+  font-size: clamp(12px, 1vw, 15px); font-weight: 700; letter-spacing: 0.3em;
   text-transform: uppercase; color: var(--mid);
-  padding-bottom: 6px; border-bottom: 1px solid var(--line);
+  padding-bottom: 6px; border-bottom: 2px solid var(--hi);
 }
 .scr-cat { display: flex; flex-direction: column; gap: 6px; }
 .scr-cat-head { display: flex; align-items: baseline; gap: 12px; }
 .scr-cat-head .tname {
   font-family: var(--font-display); font-size: clamp(18px, min(1.9vw, 3.4vh), 28px);
-  letter-spacing: 0.06em; text-transform: uppercase; color: var(--tc);
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--hi);
+  padding-left: 10px; border-left: 4px solid var(--tc);
+  line-height: 1.1;
 }
 .scr-cat-head .tbase {
   font-size: clamp(11px, 0.95vw, 14px); font-weight: 700; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--gold);
+  text-transform: uppercase; color: var(--mid);
 }
 .scr-cat-head .tcount {
   margin-left: auto;
-  font-weight: 800; font-size: clamp(14px, 1.4vw, 20px);
+  font-family: var(--font-cond); font-weight: 700; font-size: clamp(14px, 1.4vw, 20px);
   font-variant-numeric: tabular-nums; color: var(--mid);
 }
 .scr-cat-head .tcount b { color: var(--hi); }
-.scr-cat-names { display: flex; flex-wrap: wrap; gap: 5px; }
+.scr-cat-names { display: flex; flex-wrap: wrap; gap: 4px; }
 .scr-cat-name {
   font-size: clamp(12px, min(1.05vw, 2vh), 16px); font-weight: 700;
-  padding: 3px 9px; background: var(--panel); border: 1px solid var(--line);
+  padding: 3px 9px; background: var(--panel);
   white-space: nowrap;
 }
 .scr-cat-name.sold {
-  color: var(--mid); border-color: transparent;
+  color: var(--mid);
   box-shadow: inset 4px 0 0 var(--team);
   opacity: 0.75;
 }
 .scr-cat-name.unsold { color: var(--mid); text-decoration: line-through; }
 
-.scr-hot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: clamp(3px, 0.5vh, 6px); }
+.scr-hot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: clamp(2px, 0.4vh, 4px); }
 .scr-hot-row {
   display: grid; grid-template-columns: 2.2ch auto minmax(0, 1fr) auto clamp(96px, 9vw, 150px);
   align-items: center; gap: 12px; line-height: 1.15;
-  background: var(--panel); border: 1px solid var(--line);
-  border-left: 4px solid var(--team, transparent);
+  background: var(--panel);
+  border-left: 4px solid var(--team, var(--line));
   padding: clamp(3px, 0.45vh, 5px) 12px clamp(3px, 0.45vh, 5px) 10px;
 }
 .scr-hot-row .player-photo.sm { width: clamp(28px, 3.6vh, 38px); height: clamp(28px, 3.6vh, 38px); }
 .scr-hot-row .hrank {
   font-family: var(--font-display); font-size: clamp(18px, min(1.8vw, 3.2vh), 28px);
-  color: var(--gold); text-align: right;
+  color: var(--hi); text-align: right;
 }
 .scr-hot-row .hwho { display: flex; flex-direction: column; min-width: 0; }
-.scr-hot-row .hname { font-weight: 800; font-size: clamp(15px, min(1.3vw, 2.3vh), 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scr-hot-row .hname { font-weight: 700; font-size: clamp(15px, min(1.3vw, 2.3vh), 20px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scr-hot-row .hmeta {
   font-size: clamp(11px, min(0.85vw, 1.3vh), 13px); font-weight: 600; color: var(--mid);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.scr-hot-row .hmeta span { font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }
+/* the tier name arrives in its colour: keep the words in --hi, the colour as a square */
+.scr-hot-row .hmeta span { font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; -webkit-text-fill-color: var(--hi); }
+.scr-hot-row .hmeta span::before {
+  content: ''; display: inline-block; width: 0.7em; height: 0.7em; margin-right: 0.4em;
+  background: currentColor; vertical-align: 0;
+}
 .scr-hot-row .hmvp {
   display: flex; flex-direction: column; align-items: flex-end;
-  font-weight: 800; font-size: clamp(16px, min(1.5vw, 2.8vh), 23px); font-variant-numeric: tabular-nums;
+  font-family: var(--font-cond); font-weight: 700; font-size: clamp(16px, min(1.5vw, 2.8vh), 23px); font-variant-numeric: tabular-nums;
 }
 .scr-hot-row small {
+  font-family: var(--font-body);
   font-size: clamp(9px, 0.75vw, 11px); font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--mid);
 }
 .scr-hot-row .hstatus {
   display: flex; flex-direction: column; align-items: flex-end;
-  font-weight: 800; font-size: clamp(14px, min(1.3vw, 2.5vh), 20px);
-  font-variant-numeric: tabular-nums; color: var(--gold); white-space: nowrap;
+  font-family: var(--font-cond); font-weight: 700; font-size: clamp(14px, min(1.3vw, 2.5vh), 20px);
+  font-variant-numeric: tabular-nums; color: var(--hi); white-space: nowrap;
 }
 .scr-hot-row .hstatus small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.scr-hot-row.sold { background: rgba(var(--tex), 0.02); }
+.scr-hot-row.sold { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .scr-hot-row.sold .hname { color: var(--mid); }
 .scr-hot-row.unsold .hstatus { color: var(--mid); }
 
 .scr-tierbar {
-  height: 10px; background: var(--bg-2); overflow: hidden;
+  height: 8px; background: var(--bg-2); overflow: hidden;
 }
 .scr-tierbar i { /* stable element — scaleX tweens via transition */
   display: block; height: 100%;
@@ -661,14 +603,12 @@
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding: 14px 0;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
 }
 .scr-ticker-label {
-  font-size: 13px; font-weight: 800; letter-spacing: 0.3em; color: var(--mid);
+  font-size: 13px; font-weight: 700; letter-spacing: 0.3em; color: var(--mid);
   text-transform: uppercase; margin-bottom: 12px; text-align: center;
 }
-.scr-ticker-track { display: flex; gap: 18px; width: max-content; }
+.scr-ticker-track { display: flex; gap: 12px; width: max-content; }
 .scr-ticker-track.marquee { animation: scrTicker 42s linear infinite; }
 @keyframes scrTicker {
   from { transform: translateX(0); }
@@ -678,14 +618,13 @@
 .scr-signing {
   display: flex; align-items: center; gap: 12px;
   background: var(--panel-strong);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--team);
+  border-left: 6px solid var(--team);
   padding: 8px 16px 8px 10px; white-space: nowrap;
 }
 .scr-signing .player-photo.sm { width: 42px; height: 42px; }
 .scr-signing .sname { font-weight: 700; font-size: 18px; }
 .scr-signing .steam { color: var(--mid); font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-.scr-signing .sprice { font-weight: 800; font-size: 18px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.scr-signing .sprice { font-family: var(--font-cond); font-weight: 700; font-size: 20px; color: var(--hi); font-variant-numeric: tabular-nums; }
 
 /* ---------- rules board: the auctioneer's briefing ---------- */
 .scr-rules {
@@ -696,41 +635,42 @@
 .scr-rules-title {
   font-family: var(--font-display);
   font-size: clamp(26px, min(4.4vw, 6.2vh), 64px);
-  letter-spacing: 0.03em; text-transform: uppercase; text-align: center; line-height: 1.05;
+  letter-spacing: 2px; text-transform: uppercase; text-align: center; line-height: 1.05;
 }
-.scr-rules-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: clamp(8px, 1.2vw, 16px); }
-.scr-rules-tile {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
-  background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--gold);
-  padding: clamp(6px, 1.3vh, 16px) 10px;
+.scr-rules-tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+.scr-rules-tile { /* size-grid tiles: a big number over a tiny caps label */
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  background: var(--panel);
+  padding: clamp(8px, 1.6vh, 20px) 10px;
   animation: scrChipRise 380ms var(--ease-out) both;
   animation-delay: calc(120ms + var(--i) * 60ms);
 }
 .scr-rules-tile b {
   font-family: var(--font-display); font-weight: 400; line-height: 1;
-  font-size: clamp(28px, min(4vw, 6.6vh), 64px); color: var(--gold);
-  font-variant-numeric: tabular-nums;
+  font-size: clamp(28px, min(4vw, 6.6vh), 64px); color: var(--hi);
+  letter-spacing: 1px;
 }
 .scr-rules-tile span {
-  font-size: clamp(10px, min(0.95vw, 1.7vh), 15px); font-weight: 700;
+  font-size: clamp(10px, min(0.95vw, 1.7vh), 15px); font-weight: 400;
   letter-spacing: 0.1em; text-transform: uppercase; color: var(--mid);
 }
 .scr-rules-list {
   margin: 0; padding: 0; list-style: none; counter-reset: rule;
-  display: flex; flex-direction: column; gap: clamp(3px, 0.8vh, 10px);
+  display: flex; flex-direction: column;
+  border-top: 2px solid var(--hi);
 }
 .scr-rules-list li {
   counter-increment: rule;
-  display: grid; grid-template-columns: clamp(22px, 2.4vw, 38px) minmax(0, 1fr); gap: 10px; align-items: baseline;
-  font-size: clamp(14px, min(1.4vw, 2.4vh), 23px); line-height: 1.3; font-weight: 600;
-  background: var(--panel); border-left: 3px solid rgba(var(--tier-rgb), 0.6);
-  padding: clamp(4px, 0.75vh, 10px) 14px;
+  display: grid; grid-template-columns: clamp(22px, 2.4vw, 38px) minmax(0, 1fr); gap: 12px; align-items: baseline;
+  font-size: clamp(14px, min(1.4vw, 2.4vh), 23px); line-height: 1.3; font-weight: 500;
+  border-bottom: 1px solid var(--line);
+  padding: clamp(5px, 0.9vh, 12px) 4px;
   animation: scrChipRise 380ms var(--ease-out) both;
   animation-delay: calc(300ms + var(--i) * 60ms);
 }
 .scr-rules-list li::before {
   content: counter(rule);
-  font-family: var(--font-display); font-size: 1.15em; color: var(--gold); text-align: right;
+  font-family: var(--font-display); font-size: 1.15em; color: var(--hi); text-align: right;
 }
 @media (max-width: 760px) {
   .scr-rules-tiles { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -748,54 +688,46 @@
   padding: clamp(6px, 1.1vh, 12px) 18px clamp(8px, 1.5vh, 16px);
   border-left: 6px solid var(--team);
   perspective: 600px;
-  transition: background-color 400ms ease;
+  transition: background-color 400ms var(--ad-ease), color 400ms var(--ad-ease);
 }
+.scr-cell + .scr-cell::before { display: none; }
 .scr-cell-main { flex: 1; min-width: 0; }
 /* right side: the team's max bid, OUT once a lot's next bid is past it, or FULL */
 .scr-cell-side {
   flex: none; display: flex; flex-direction: column; align-items: flex-end; text-align: right;
 }
 .scr-cell-side .lbl {
-  font-size: clamp(11px, 1.1vw, 14px); font-weight: 700; white-space: nowrap;
+  font-size: clamp(11px, 1.1vw, 14px); font-weight: 400; white-space: nowrap;
   letter-spacing: 0.1em; color: var(--mid); text-transform: uppercase;
 }
 .scr-cell-side .val { /* keyed-by: max bid / OUT / FULL — flips on change */
-  font-weight: 800; font-size: clamp(18px, min(2vw, 3.6vh), 30px); line-height: 1.15;
+  font-family: var(--font-cond);
+  font-weight: 700; font-size: clamp(18px, min(2vw, 3.6vh), 30px); line-height: 1.15;
   font-variant-numeric: tabular-nums; text-transform: uppercase; color: var(--hi);
   transform-origin: top;
   animation: scrPurseFlip 300ms var(--ease-out) both;
 }
 .scr-cell.out .scr-cell-main { opacity: 0.5; }
 .scr-cell.out .scr-cell-side .val { color: var(--danger); letter-spacing: 0.08em; }
-.scr-cell + .scr-cell::before { /* skewed broadcast divider */
-  content: '';
-  position: absolute; left: -7px; top: -1px; bottom: 0; width: 2px;
-  background: var(--line);
-  transform: skewX(-12deg);
-}
-.scr-cell.leading {
-  background-color: rgba(var(--team-rgb), 0.13);
-  box-shadow: inset 0 1px 0 var(--team);
-  animation: scrCellGlow 2.4s ease-in-out infinite alternate;
-}
-@keyframes scrCellGlow {
-  from { filter: drop-shadow(0 0 0 transparent); }
-  to   { filter: drop-shadow(0 -4px 18px rgba(var(--team-rgb), 0.35)); }
-}
+/* the leading team's cell inverts — the adidas "selected" block */
+.scr-cell.leading { background-color: var(--hi); color: var(--bg-0); }
+.scr-cell.leading .scr-purse,
+.scr-cell.leading .scr-squad,
+.scr-cell.leading .scr-cell-side .lbl,
+.scr-cell.leading .scr-cell-side .val { color: var(--bg-0); }
 .scr-cell.full { opacity: 0.55; }
 .scr-cell-name {
-  font-family: var(--font-display);
-  font-size: clamp(14px, 1.4vw, 20px);
-  letter-spacing: 0.05em; text-transform: uppercase;
+  font-family: var(--font-cond); font-weight: 700;
+  font-size: clamp(14px, 1.4vw, 20px); line-height: 1.2;
+  letter-spacing: 0.08em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .scr-purse-row { display: flex; align-items: baseline; gap: 10px; }
-.scr-purse { /* keyed-by: purse value — flips down on change */
-  font-weight: 800; font-size: clamp(20px, min(2.4vw, 4.2vh), 34px);
-  font-variant-numeric: tabular-nums;
-  background: linear-gradient(180deg, var(--gold-hi), var(--gold));
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
+.scr-purse { /* keyed-by: purse value — flips down on change (Anton: changes once per sale) */
+  font-family: var(--font-display);
+  font-size: clamp(20px, min(2.4vw, 4.2vh), 34px);
+  line-height: 1.1; letter-spacing: 1px;
+  color: var(--hi);
   transform-origin: top;
   animation: scrPurseFlip 300ms var(--ease-out) both;
 }
@@ -804,7 +736,8 @@
   to   { transform: rotateX(0); opacity: 1; }
 }
 .scr-delta { /* keyed-by: purse value — explains why it changed */
-  font-weight: 800; font-size: clamp(13px, 1.3vw, 18px);
+  font-family: var(--font-cond);
+  font-weight: 700; font-size: clamp(13px, 1.3vw, 18px);
   font-variant-numeric: tabular-nums; color: var(--danger);
   animation: scrDeltaFloat 1.4s var(--ease-out) both;
 }
@@ -816,7 +749,7 @@
   100% { transform: translateY(-14px); opacity: 0; }
 }
 .scr-squad {
-  font-size: clamp(11px, 1.1vw, 14px); font-weight: 600;
+  font-size: clamp(11px, 1.1vw, 14px); font-weight: 400;
   letter-spacing: 0.1em; color: var(--mid); text-transform: uppercase;
 }
 .scr-fuel { /* purse depletion bar */
@@ -833,9 +766,9 @@
 /* ---------- SOLD / UNSOLD takeover (keyed-by: event id) ----------
    Every beat is baked into animation-delays inside this single mount —
    no JS timers besides the 4s unmount. Timeline (SOLD):
-   0 white flash · 0-420 team panels flood · 200-620 stamp slam · 620 shake+ring
+   0 white flash · 0-420 team panels close in · 200-620 stamp slam · 620 shake+ring
    700+ confetti · 800-1250 player card rises · 1200 team plate · 1500 price
-   per-char · 3450-3950 exit fade. */
+   per-char · 3450-3950 exit fade (must finish before the 4000ms unmount). */
 .scr-flash {
   position: fixed; inset: 0; z-index: 70;
   display: grid; place-items: center;
@@ -848,7 +781,7 @@
 }
 .scr-flash-scrim {
   position: absolute; inset: 0;
-  background: rgba(4, 6, 13, 0.78);
+  background: rgba(0, 0, 0, 0.8);
   animation: scrFadeIn 250ms ease-out both;
 }
 @keyframes scrFadeIn { from { opacity: 0; } }
@@ -861,29 +794,22 @@
   0% { opacity: 0.9; }
   100% { opacity: 0; }
 }
+/* two flat halves in the buying team's colour close in from the sides */
 .scr-flash-panel {
-  position: absolute; top: -12%; bottom: -12%; width: 68%;
-  transform: skewX(-10deg);
+  position: absolute; top: 0; bottom: 0; width: 50%;
+  background: var(--fc);
 }
-.scr-flash-panel.a {
-  left: -9%;
-  background: linear-gradient(160deg, var(--fc), rgba(var(--fc-rgb), 0.75));
-  animation: scrPanelA 420ms var(--ease-wipe) both;
-}
-.scr-flash-panel.b {
-  right: -9%;
-  background: linear-gradient(340deg, rgba(var(--fc-rgb), 0.92), rgba(var(--fc-rgb), 0.62));
-  animation: scrPanelB 420ms var(--ease-wipe) both;
-}
-@keyframes scrPanelA { from { transform: skewX(-10deg) translateX(-130%); } to { transform: skewX(-10deg) translateX(0); } }
-@keyframes scrPanelB { from { transform: skewX(-10deg) translateX(130%); } to { transform: skewX(-10deg) translateX(0); } }
-.scr-flash.unsold .scr-flash-panel.a { background: linear-gradient(160deg, #334155, #0f172a); }
-.scr-flash.unsold .scr-flash-panel.b { background: linear-gradient(340deg, #1e293b, #0f172a); }
+.scr-flash-panel.a { left: 0; animation: scrPanelA 420ms var(--ease-wipe) both; }
+.scr-flash-panel.b { left: 50%; animation: scrPanelB 420ms var(--ease-wipe) both; }
+@keyframes scrPanelA { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+@keyframes scrPanelB { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.scr-flash.unsold .scr-flash-panel.a { background: #000; }
+.scr-flash.unsold .scr-flash-panel.b { background: #1e1e1e; }
 .scr-flash.unsold .scr-flash-white { display: none; }
 
 .scr-flash-shake {
   position: relative; z-index: 2;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 0 24px; max-width: 100vw;
   animation: scrShake 250ms steps(5) 620ms 1;
 }
@@ -895,25 +821,32 @@
   80% { transform: translate(5px, 3px); }
   100% { transform: translate(0, 0); }
 }
+/* SOLD is the Running app's tile: mint, black, heavy condensed italic */
 .scr-stamp {
-  font-family: var(--font-display);
+  font-family: var(--font-cond);
+  font-style: italic; font-weight: 800;
   font-size: clamp(110px, 19vw, 280px);
-  line-height: 0.95; letter-spacing: 0.04em;
-  color: #fff;
-  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.22);
+  line-height: 0.95; letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #000;
+  background: var(--ad-run-mint);
+  padding: 0 0.18em 0.02em 0.14em;
   transform: rotate(-4deg);
   animation: scrStampSlam 420ms var(--ease-pop) 200ms both;
 }
-.scr-flash.dark-ink .scr-stamp { color: #04060d; text-shadow: none; }
 @keyframes scrStampSlam {
-  from { transform: scale(2.6) rotate(-9deg); opacity: 0; filter: blur(6px); }
-  to   { transform: scale(1) rotate(-4deg); opacity: 1; filter: blur(0); }
+  from { transform: scale(2.6) rotate(-9deg); opacity: 0; }
+  to   { transform: scale(1) rotate(-4deg); opacity: 1; }
 }
 .scr-flash.unsold .scr-stamp {
-  color: #cbd5e1;
+  font-family: var(--font-display);
+  font-style: normal; font-weight: 400;
+  color: #fff;
+  background: transparent;
   border: 5px solid var(--danger);
   padding: 0 28px;
   font-size: clamp(80px, 14vw, 200px);
+  letter-spacing: 0.04em;
   animation: scrUnsoldStamp 500ms steps(2) 200ms both;
 }
 @keyframes scrUnsoldStamp {
@@ -924,80 +857,82 @@
   position: absolute; top: 8%; left: 50%; width: 46vmin; height: 46vmin;
   margin-left: -23vmin;
   border: 3px solid rgba(255, 255, 255, 0.8);
-  border-radius: 50%;
+  border-radius: 0;
   animation: scrShock2 500ms ease-out 620ms both;
   pointer-events: none;
 }
-.scr-flash.dark-ink .scr-flash-shock { border-color: rgba(4, 6, 13, 0.55); }
+.scr-flash.dark-ink .scr-flash-shock { border-color: rgba(0, 0, 0, 0.55); }
 .scr-flash.unsold .scr-flash-shock { display: none; }
 @keyframes scrShock2 {
   from { transform: scale(0.7); opacity: 0.8; }
   to   { transform: scale(1.7); opacity: 0; }
 }
 .scr-flash-card {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin-top: 8px;
   animation: scrCardRise 450ms var(--ease-out) 800ms both;
 }
 @keyframes scrCardRise {
-  from { transform: translateY(60px); opacity: 0; filter: blur(10px); }
-  to   { transform: translateY(0); opacity: 1; filter: blur(0); }
+  from { transform: translateY(60px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
 .scr-flash-card .player-photo.xl {
   width: clamp(130px, 18vh, 210px); height: clamp(130px, 18vh, 210px);
-  border: 5px solid rgba(255, 255, 255, 0.9); border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  border: 4px solid #fff; border-radius: 0;
+  box-shadow: none;
 }
-.scr-flash.dark-ink .scr-flash-card .player-photo.xl { border-color: rgba(4, 6, 13, 0.7); }
+.scr-flash.dark-ink .scr-flash-card .player-photo.xl { border-color: #000; }
 .scr-flash.unsold .scr-flash-card .player-photo.xl {
-  border-color: rgba(148, 163, 184, 0.6);
+  border-color: #929396;
   filter: grayscale(1);
-  transition: filter 800ms ease 1000ms;
 }
 .scr-flash-name {
   font-family: var(--font-display);
-  font-size: clamp(34px, 4.6vw, 64px);
-  letter-spacing: 0.03em; text-transform: uppercase; text-align: center;
-  color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+  font-size: clamp(34px, 4.6vw, 64px); line-height: 1;
+  letter-spacing: 2px; text-transform: uppercase; text-align: center;
+  color: #fff;
 }
-.scr-flash.dark-ink .scr-flash-name { color: #04060d; text-shadow: none; }
+.scr-flash.dark-ink .scr-flash-name { color: #000; }
 .scr-payoff {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
   margin-top: 6px;
 }
+/* the buyer: a flat inverse plate (white on a dark team colour, black on a light one) */
 .scr-payoff-team {
   display: inline-block;
-  clip-path: polygon(14px 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
-  background: rgba(4, 6, 13, 0.35);
-  color: #fff;
-  padding: 8px 30px;
-  font-weight: 800; font-size: clamp(18px, 2.2vw, 30px);
+  background: #fff;
+  color: #000;
+  padding: 10px 28px;
+  font-weight: 700; font-size: clamp(18px, 2.2vw, 30px); line-height: 1.15;
   letter-spacing: 0.16em; text-transform: uppercase;
   animation: scrCardRise 400ms var(--ease-out) 1200ms both;
 }
-.scr-flash.dark-ink .scr-payoff-team { background: rgba(255, 255, 255, 0.4); color: #04060d; }
+.scr-flash.dark-ink .scr-payoff-team { background: #000; color: #fff; }
 .scr-payoff-price {
   display: flex; align-items: baseline; gap: 2px;
   font-family: var(--font-display);
-  font-size: clamp(52px, 7vw, 110px);
-  color: #fff; text-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+  font-size: clamp(52px, 7vw, 110px); line-height: 1;
+  letter-spacing: 1px;
+  color: #fff;
 }
-.scr-flash.dark-ink .scr-payoff-price { color: #04060d; text-shadow: none; }
+.scr-flash.dark-ink .scr-payoff-price { color: #000; }
 .scr-payoff-price .ch { /* split-flap price reveal, 45ms/char */
   display: inline-block;
   animation: scrCharIn 300ms var(--ease-out) both;
   animation-delay: calc(1500ms + var(--i) * 45ms);
 }
 @keyframes scrCharIn {
-  from { transform: translateY(0.5em); opacity: 0; filter: blur(5px); }
-  to   { transform: translateY(0); opacity: 1; filter: blur(0); }
+  from { transform: translateY(0.5em); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
 .scr-payoff-price .pts {
-  font-size: 0.32em; letter-spacing: 0.2em; margin-left: 12px;
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 0.24em; letter-spacing: 0.2em; margin-left: 14px;
   animation: scrCharIn 300ms var(--ease-out) 2100ms both;
 }
 .scr-payoff.unsold-line {
   font-weight: 700; font-size: clamp(18px, 2.2vw, 28px);
-  letter-spacing: 0.12em; color: var(--mid); text-transform: uppercase;
+  letter-spacing: 0.12em; color: #929396; text-transform: uppercase;
   animation: scrCardRise 400ms var(--ease-out) 1200ms both;
 }
 .scr-flash.unsold { animation-name: scrFlashExitDown; }
@@ -1024,68 +959,64 @@
 .scr-timeout { width: 100%; }
 .scr-to-top { display: flex; flex-direction: column; align-items: center; }
 .scr-to-badge {
-  display: flex; align-items: center; justify-content: center; gap: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 18px;
   font-family: var(--font-display);
-  font-size: clamp(32px, 5.5vw, 76px);
-  letter-spacing: 0.06em; text-transform: uppercase; text-align: center;
-  color: var(--gold);
+  font-size: clamp(32px, 5.5vw, 76px); line-height: 1;
+  letter-spacing: 3px; text-transform: uppercase; text-align: center;
+  color: var(--hi);
   margin-bottom: 4px;
-  animation: scrGlint 1.8s ease-out 200ms both, scrToPulse 2.4s ease-in-out 1.4s infinite;
-  background: linear-gradient(100deg, var(--gold-deep) 20%, var(--gold-hi) 50%, var(--gold-deep) 80%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
+  animation: scrChipRise 420ms var(--ease-out) 120ms both;
 }
-.scr-to-badge i { /* pause glyph — two bars, drawn so it inherits no glyph metrics */
-  flex: none; width: clamp(20px, 3vw, 42px); height: clamp(30px, 4.5vw, 62px);
-  border-left: clamp(7px, 1vw, 14px) solid var(--gold);
-  border-right: clamp(7px, 1vw, 14px) solid var(--gold);
+.scr-to-badge i { /* pause glyph — two orange bars, drawn so it inherits no glyph metrics */
+  flex: none; width: clamp(18px, 2.6vw, 36px); height: clamp(26px, 3.8vw, 52px);
+  border-left: clamp(6px, 0.9vw, 12px) solid var(--ad-orange);
+  border-right: clamp(6px, 0.9vw, 12px) solid var(--ad-orange);
 }
 @keyframes scrToPulse { 50% { opacity: 0.72; } }
 
-/* cosmetic countdown — a large m:ss under the badge (keyed-by: stage) */
+/* cosmetic countdown — a large m:ss under the badge (keyed-by: stage).
+   Barlow Condensed 800: it ticks every second, and Anton has no tabular figures */
 .scr-to-timer {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
   margin: 6px 0 20px; text-align: center;
   animation: scrColIn 500ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
 }
 .scr-to-timer-clock {
-  font-family: var(--font-display); line-height: 1;
+  font-family: var(--font-cond); font-weight: 800; line-height: 1;
   font-size: clamp(52px, 9vw, 128px);
-  letter-spacing: 0.03em; color: var(--hi);
+  letter-spacing: 0.02em; color: var(--hi);
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 34px rgba(244, 247, 255, 0.18);
 }
 .scr-to-timer-label {
-  font-size: clamp(11px, 1.2vw, 15px); font-weight: 700;
+  font-size: clamp(11px, 1.2vw, 15px); font-weight: 400;
   letter-spacing: 0.24em; text-transform: uppercase; color: var(--mid);
 }
 .scr-to-timer.urgent .scr-to-timer-clock {
-  color: var(--danger); text-shadow: 0 0 34px rgba(255, 46, 77, 0.4);
+  color: var(--danger);
   animation: scrToPulse 1s ease-in-out infinite;
 }
 .scr-to-timer.done .scr-to-timer-done {
   font-family: var(--font-display);
-  font-size: clamp(30px, 4.8vw, 68px);
-  letter-spacing: 0.05em; text-transform: uppercase; color: var(--mid);
+  font-size: clamp(30px, 4.8vw, 68px); line-height: 1;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--mid);
 }
 
 .scr-timeout .scr-final-sub { margin-bottom: 26px; }
+/* the purse block: the Running app's stat layout — big number, tiny caps label */
 .scr-to-purse {
   background: var(--panel-strong);
-  border: 1px solid var(--line); border-top: none;
-  padding: 12px;
+  padding: 12px 14px;
 }
 .scr-to-purse .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .scr-to-purse .label {
-  font-size: clamp(11px, 1.1vw, 14px); font-weight: 700; letter-spacing: 0.12em;
+  font-size: clamp(11px, 1.1vw, 14px); font-weight: 400; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--mid);
 }
 .scr-to-purse .amount {
-  font-family: var(--font-display); font-size: clamp(24px, 2.8vw, 40px);
-  color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  font-family: var(--font-display); font-size: clamp(24px, 2.8vw, 40px); line-height: 1.1;
+  color: var(--hi); letter-spacing: 1px;
 }
-.scr-to-purse .scr-fuel { position: relative; height: 6px; margin: 8px 0; background: var(--fuel-track); }
+.scr-to-purse .scr-fuel { position: relative; height: 4px; margin: 8px 0; background: var(--fuel-track); }
 .scr-to-purse .row2 {
   display: flex; justify-content: space-between; gap: 8px;
   font-size: clamp(12px, 1.2vw, 16px); font-weight: 600; color: var(--mid);
@@ -1096,18 +1027,11 @@
 .scr-final { width: 100%; }
 .scr-final-title {
   font-family: var(--font-display);
-  font-size: clamp(48px, 7vw, 104px);
-  letter-spacing: 0.03em; text-transform: uppercase; text-align: center;
-  background: linear-gradient(100deg, var(--gold-deep) 20%, var(--gold-hi) 50%, var(--gold-deep) 80%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
-  animation: scrGlint 1.8s ease-out 400ms both;
+  font-size: clamp(48px, 7vw, 104px); line-height: 1;
+  letter-spacing: 3px; text-transform: uppercase; text-align: center;
+  color: var(--hi);
+  animation: scrChipRise 500ms var(--ease-out) 200ms both;
   margin-bottom: 6px;
-}
-@keyframes scrGlint {
-  from { background-position: 180% 0; }
-  to   { background-position: -40% 0; }
 }
 .scr-final-sub {
   text-align: center; color: var(--mid);
@@ -1115,30 +1039,30 @@
   letter-spacing: 0.18em; text-transform: uppercase;
   margin-bottom: 30px;
 }
-/* superlatives strip: top buy · best value · steal at base */
+/* superlatives strip: top buy · best value · steal at base — spec-highlight tiles */
 .scr-awards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px; margin-bottom: 18px;
+  gap: 4px; margin-bottom: 18px;
 }
 .scr-award {
   min-width: 0;
   background: var(--panel-strong);
-  border: 1px solid var(--line); border-left: 4px solid var(--team);
-  padding: 8px 14px 10px 12px;
+  border-left: 6px solid var(--team);
+  padding: 10px 14px 12px 12px;
   animation: scrChipRise 420ms var(--ease-out) both;
   animation-delay: calc(500ms + var(--i) * 120ms);
 }
 .scr-award-title {
-  font-size: clamp(10px, 0.9vw, 13px); font-weight: 700; letter-spacing: 0.14em;
+  font-size: clamp(10px, 0.9vw, 13px); font-weight: 400; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--mid);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.scr-award-title b { color: var(--gold); font-weight: 800; }
-.scr-award-body { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.scr-award-title b { color: var(--hi); font-weight: 700; }
+.scr-award-body { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .scr-award-body .player-photo.sm { flex: none; width: clamp(30px, 4.4vh, 44px); height: clamp(30px, 4.4vh, 44px); }
 .scr-award .awho { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
 .scr-award .aname {
-  font-weight: 800; font-size: clamp(15px, min(1.4vw, 2.6vh), 21px);
+  font-weight: 700; font-size: clamp(15px, min(1.4vw, 2.6vh), 21px);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .scr-award .ateam {
@@ -1148,11 +1072,13 @@
 }
 .scr-award .afig {
   flex: none; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.15;
-  font-weight: 800; font-size: clamp(17px, min(1.6vw, 3vh), 26px);
-  color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-family: var(--font-cond);
+  font-weight: 700; font-size: clamp(17px, min(1.6vw, 3vh), 26px);
+  color: var(--hi); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .scr-award .afig small {
-  font-size: clamp(10px, 0.85vw, 12px); font-weight: 700; letter-spacing: 0.1em;
+  font-family: var(--font-body);
+  font-size: clamp(10px, 0.85vw, 12px); font-weight: 400; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--mid);
 }
 .scr-final-grid {
@@ -1167,25 +1093,19 @@
   from { transform: translateY(40px); opacity: 0; }
   to   { transform: translateY(0); opacity: 1; }
 }
+/* each team: a flat team-colour header, then its roster as divided rows */
 .scr-final-head {
   position: relative; overflow: hidden;
   background: var(--team);
+  color: #fff;
   padding: 14px 16px;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 14px) 100%, 0 100%);
 }
-.scr-final-head.dark-ink { color: #04060d; }
-.scr-final-head::after { /* per-column metallic sheen */
-  content: '';
-  position: absolute; top: 0; bottom: 0; left: 0; width: 120px;
-  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.22), transparent);
-  animation: scrSheen 8s linear infinite;
-  animation-delay: calc(var(--i) * 2s);
-}
+.scr-final-head.dark-ink { color: #000; }
 .scr-final-head h3 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(20px, 2.2vw, 32px);
-  letter-spacing: 0.04em; text-transform: uppercase;
+  font-family: var(--font-display); font-weight: 400;
+  font-size: clamp(20px, 2.2vw, 32px); line-height: 1.1;
+  letter-spacing: 2px; text-transform: uppercase;
 }
 .scr-final-head .cap {
   font-size: clamp(12px, 1.2vw, 15px); font-weight: 600;
@@ -1193,13 +1113,12 @@
 }
 /* Squads read top-to-bottom; a wide team column (2 teams × 12 players in DTC 3)
    splits into two columns so a full roster still fits a 1080p projector. */
-.scr-final-rows { columns: 220px 2; column-gap: 8px; margin-top: 8px; }
+.scr-final-rows { columns: 220px 2; column-gap: 12px; margin-top: 6px; }
 .scr-final-row {
   display: flex; align-items: center; gap: 10px;
-  background: var(--panel-strong);
   padding: 8px 12px;
-  margin-bottom: 3px; break-inside: avoid;
-  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--line);
+  break-inside: avoid;
   animation: scrRowReveal 360ms var(--ease-out) both;
   animation-delay: calc(var(--ci) * 120ms + 300ms + var(--i) * 55ms);
 }
@@ -1207,15 +1126,16 @@
   from { clip-path: inset(0 100% 0 0); opacity: 0; }
   to   { clip-path: inset(0 0 0 0); opacity: 1; }
 }
-.scr-final-row.top-buy { border-left-color: var(--gold); }
+.scr-final-row.top-buy { background: var(--hi); color: var(--bg-0); border-bottom-color: var(--hi); }
 .scr-final-row .fname { font-weight: 700; font-size: clamp(14px, 1.4vw, 19px); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .scr-final-row .fchip {
-  flex: none; font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
-  color: var(--gold); border: 1px solid var(--gold-deep); padding: 1px 6px;
+  flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  color: #000; background: var(--ad-run-mint); padding: 2px 6px;
 }
 .scr-final-row .fprice {
-  margin-left: auto; font-weight: 800; font-size: clamp(14px, 1.4vw, 19px);
-  color: var(--gold); font-variant-numeric: tabular-nums;
+  margin-left: auto;
+  font-family: var(--font-cond); font-weight: 700; font-size: clamp(15px, 1.5vw, 21px);
+  color: inherit; font-variant-numeric: tabular-nums;
 }
 .scr-final-empty { color: var(--mid); font-size: 15px; padding: 10px 12px; }
 
@@ -1230,6 +1150,10 @@
   }
   .scr-confetti { display: none; }
   .scr-flash { opacity: 1; }
+  /* one-shot flourishes whose keyframes end invisible would otherwise sit at
+     full opacity: a box round the amount, bars on the edges, and a white layer
+     over the SOLD card */
+  .scr-shockwave, .scr-edgeflash, .scr-flash-white, .scr-flash-shock { display: none; }
 }
 
 /* ---------- responsive ---------- */
@@ -1241,7 +1165,6 @@
   .scr-live { font-size: 13px; letter-spacing: 0.18em; gap: 8px; }
   .scr-theatre-top { flex-direction: row-reverse; justify-content: flex-end; }
   .scr-foot { grid-template-columns: repeat(2, 1fr); }
-  .scr-cell + .scr-cell::before { display: none; }
 }
 @media (max-width: 980px) {
   .scr-boards.two { grid-template-columns: minmax(0, 1fr); }
@@ -1274,7 +1197,7 @@
    purse footer off the bottom. BidFeed hides a row that would show half cut
    (.cut — visibility only, so the measurement it is based on stays put). */
 @media (min-width: 981px) {
-  .scr-page[data-view='lot'] { height: 100vh; min-height: 0; }
+  .scr-page[data-view='lot'] { height: 100vh; height: 100dvh; min-height: 0; }
   .scr-page[data-view='lot'] .scr-main { min-height: 0; }
   .scr-page[data-view='lot'] .scr-lot { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
   .scr-page[data-view='lot'] .scr-theatre { display: flex; flex-direction: column; max-height: 100%; min-height: 0; }
@@ -1300,14 +1223,23 @@
   .scr-to-purse .scr-fuel { margin: 5px 0; }
   .scr-final-row { padding: 5px 12px; }
 }
+/* phones (spectators open the big screen too): the same flat language, one column */
 @media (max-width: 560px) {
+  .scr-head { flex-wrap: wrap; height: auto; padding: 10px 14px; row-gap: 10px; }
+  .scr-brand { flex: 1 1 0; }
+  .scr-stagechip { order: 2; flex: 1 0 100%; text-align: center; }
   .scr-foot { grid-template-columns: 1fr 1fr; }
-  .scr-cell { flex-wrap: wrap; gap: 2px 10px; }
+  .scr-cell { flex-wrap: wrap; gap: 2px 10px; padding: 8px 10px 10px 12px; }
   .scr-cell-side { width: 100%; flex-direction: row; align-items: baseline; justify-content: space-between; }
-  .scr-brand { font-size: 13px; }
+  .scr-brand { font-size: 13px; gap: 8px; letter-spacing: 1px; }
+  .scr-brand-bar { height: 22px; width: 4px; }
+  .scr-sound, .scr-theme { width: 40px; height: 40px; }
+  .scr-head-right { gap: 8px; }
   .scr-sg { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .scr-sg-title { border-right: none; }
   .scr-sg-cells { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .scr-hot-row { grid-template-columns: 2.2ch auto minmax(0, 1fr) auto; }
   .scr-hot-row .hmvp { display: none; }
+  .scr-bid-row .team { font-size: 16px; }
+  .scr-plate { padding: 10px 16px; }
 }

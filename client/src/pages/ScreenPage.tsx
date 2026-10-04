@@ -868,7 +868,7 @@ function FlashOverlay({ flash }: { flash: FlashInfo }) {
       w: 7 + Math.random() * 6,
       h: 10 + Math.random() * 9,
       r: Math.random() < 0.3 ? '50%' : '2px',
-      c: [color, '#fbbf24', '#f4f7ff'][i % 3],
+      c: [color, '#8dfe8e', '#ffffff'][i % 3], // team colour, Running mint, white
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flash.id]);
