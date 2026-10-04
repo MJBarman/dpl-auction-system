@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Icon } from '../icons';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { BidSoundToggle, ConnectionDot, OfflineBanner, ThemeToggle, useBidSound } from '../ui';
@@ -12,7 +13,7 @@ import TeamsTab from '../admin/TeamsTab';
 type Tab = 'auction' | 'players' | 'teams' | 'settings' | 'log';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'auction', label: '🔨 Auction' },
+  { key: 'auction', label: 'Auction' },
   { key: 'players', label: 'Players' },
   { key: 'teams', label: 'Teams' },
   { key: 'settings', label: 'Settings' },
@@ -51,7 +52,7 @@ export default function AdminPage() {
     <div className="admin-page">
       <header className="topbar">
         <div className="topbar-left">
-          <Link to="/" className="brand">🏏 {state.settings.auctionName}</Link>
+          <Link to="/" className="brand"><span className="brand-mark" aria-hidden />{state.settings.auctionName}</Link>
           <span className={`stage-chip stage-${state.stage}`}>{state.stage.toUpperCase()}</span>
         </div>
         <nav className="tabs">
@@ -73,7 +74,7 @@ export default function AdminPage() {
       {state.admin && state.admin.warnings.length > 0 && tab !== 'settings' && (
         <div className="warnings">
           {state.admin.warnings.map((w, i) => (
-            <div key={i} className="warning">⚠️ {w}</div>
+            <div key={i} className="warning"><Icon name="warning" /> {w}</div>
           ))}
         </div>
       )}

@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { Icon } from '../icons';
 import { StateView, TeamView } from '../types';
 import { fmt, Modal, useAction, useToast } from '../ui';
 
@@ -82,7 +83,7 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
               ? 'No devices signed in yet'
               : devices === 1
                 ? '1 device signed in'
-                : `⚠ ${devices} devices signed in — every one of them can bid. Unexpected? "New code" logs them all out.`}
+                : <><Icon name="warning" /> {devices} devices signed in — every one of them can bid. Unexpected? &quot;New code&quot; logs them all out.</>}
           </div>
         </div>
       </div>
