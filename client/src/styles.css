@@ -606,15 +606,19 @@ label.check input[type='checkbox']:focus-visible { outline: 1px dashed var(--ad-
 }
 .bid-row:last-child { border-bottom: 0; }
 .bid-row > span:not(.dot):not(.bid-amt) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the standing bid: a grey tile with a 4px ink bar, like the projector feed's
+   newest row — clear, without outshining the amount and the SOLD button */
 .bid-row.leading {
-  background-color: var(--ad-inverse);
-  color: var(--ad-on-inverse);
-  border-bottom-color: var(--ad-inverse);
+  background-color: var(--ad-surface-alt);
+  box-shadow: inset 4px 0 0 var(--ad-text);
   font-weight: 700;
 }
-.bid-row.leading .muted { color: inherit; opacity: .72; }
 .bid-amt { margin-left: auto; flex: none; font: 700 16px/24px var(--ad-font-body); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .card > h3 + .bid-row { border-top: 1px solid var(--ad-divider); }
+/* a card that ends in an edge-to-edge list or table closes on its own border */
+.card:has(> .bid-row:last-child),
+.card:has(> .table:last-child),
+.card:has(> .table-scroll:last-child) { padding-bottom: 0; }
 
 
 /* =============================================================================
@@ -669,7 +673,6 @@ label.check input[type='checkbox']:focus-visible { outline: 1px dashed var(--ad-
   font: 700 12px/20px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase;
   white-space: nowrap;
 }
-.stage-chip.stage-live::before { content: ''; width: 8px; height: 8px; flex: none; background: var(--ad-live); }
 .stage-chip.stage-accelerated { color: var(--ad-warning-text); box-shadow: inset 3px 0 0 var(--ad-orange); }
 .stage-chip.stage-completed { color: var(--ad-text-2); }
 
@@ -870,6 +873,9 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
   text-wrap: balance;
 }
 .landing-title-row .conn-dot { order: 1; }
+/* on the hero it is a quiet status line, not a headline: the stage banner says whether the auction is live */
+.landing-title-row .conn-dot.on { color: var(--ad-text-2); }
+.landing-title-row .conn-dot.on::before { background: var(--ad-live); }
 .landing-title-row .theme-toggle { position: absolute; top: 16px; right: var(--gutter); }
 .landing-hero > p.muted { font: var(--ad-body-l); max-width: 640px; margin: 16px auto 0; }
 .landing-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
@@ -1021,6 +1027,7 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
 .bid-panel > .row:last-child { flex-wrap: wrap; gap: 4px; margin: 8px 0 0; }
 .bid-panel > .row:last-child .btn { flex: 1 1 auto; gap: 6px; min-height: 40px; padding: 0 8px; font-size: 14px; }
 .bid-panel > .row:last-child .btn .icon { width: 18px; height: 18px; }
+.bid-panel > .row:last-child > .btn:nth-child(-n + 2) { flex-basis: calc(50% - 2px); }
 @media (hover: hover) and (pointer: fine) {
   .btn.bid-btn:hover:not(:disabled) { background-color: var(--ad-hover-alt); border-color: inherit; }
 }
