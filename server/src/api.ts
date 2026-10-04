@@ -8,7 +8,7 @@ import { AuctionError } from './engine';
 import {
   PHOTO_MAX_BYTES, photosConfigured, photoUrlFor, removePhoto, sniffImage, uploadPhoto,
 } from './photos';
-import { buildInitialState, generateCode } from './seed';
+import { buildInitialState, factoryResetPreview, generateCode } from './seed';
 import { statePayloadFor } from './views';
 import {
   IncrementRung, Player, PlayerStats, Settings, State, Tier,
@@ -649,8 +649,20 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ ok: true });
   });
 
-  router.post('/admin/factory-reset', requireAdmin, (req, res) => {
+  router.get('/admin/factory-reset/preview', requireAdmin, (_req, res) => {
+    const teamDevices = store.state.teams.reduce((n, t) => n + store.countSessionsForTeam(t.id), 0);
+    res.json({ ...factoryResetPreview(store.state), teamDevices });
+  });
+
+  // A factory reset wipes everything, so it takes the admin PIN again even on a
+  // signed-in console, rate-limited like the sign-in.
+  router.post('/admin/factory-reset', requireAdmin, loginRateLimiter(5), (req, res) => {
     if (req.body?.confirm !== true) throw new AuctionError('Pass confirm: true to factory-reset');
+    const pin = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
+    if (!pin || !safeEqual(pin, getPin())) {
+      store.logEvent('auth', 'Factory reset refused — wrong PIN');
+      throw new AuctionError('Wrong PIN — nothing was reset', 403);
+    }
     const fresh = buildInitialState();
     // Keep versions monotonic so clients never mistake the reset for stale state.
     fresh.version = (store.state.version ?? 0) + 1;

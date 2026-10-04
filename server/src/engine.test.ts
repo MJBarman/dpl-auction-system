@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as engine from './engine';
-import { applyDataMigrations, buildInitialState } from './seed';
+import { applyDataMigrations, buildInitialState, factoryResetPreview } from './seed';
 import { State } from './types';
 
 function fresh(): State {
@@ -204,6 +204,43 @@ test('the step above 3,000 drops from +500 to +250 only on the untouched ladder,
   assert.deepEqual(run(old()), [100, 200, 250], 'the live site today');
   assert.deepEqual(run(old(), 'live'), [100, 200, 500], 'never mid-auction');
   assert.deepEqual(run([{ upTo: 1000, step: 100 }, { upTo: null, step: 500 }]), [100, 500], 'an edited ladder is kept');
+});
+
+test('factory-reset preview: a fresh seed loses nothing beyond the codes', () => {
+  const p = factoryResetPreview(fresh());
+  assert.deepEqual(p, {
+    stage: 'setup', sold: 0, unsold: 0, watchlistEntries: 0,
+    photosUnlinked: [], playersAdded: [], playersRemoved: [], playersEdited: [], teamsChanged: [], settingsChanged: [],
+  });
+});
+
+test('factory-reset preview lists every result, upload, edit and setting the reset throws away', () => {
+  const s = fresh();
+  s.stage = 'live';
+  Object.assign(playerByName(s, 'Hirak'), { status: 'sold', teamId: 't1', price: 4000 });
+  playerByName(s, 'Deep').status = 'unsold';
+  playerByName(s, 'Padum').photoPath = 'players/dtc3-p2/123.jpg'; // uploaded after the seed (the seed has none)
+  playerByName(s, 'Udit').role = 'Batter';
+  s.players = s.players.filter((p) => p.name !== 'Yatrick');
+  s.players.push({ ...playerByName(s, 'Ronny'), id: 'p-new', name: 'Guest' });
+  s.teams[1].owner = 'Someone';
+  s.settings.purse = 25000;
+  s.settings.increments[2].step = 500;
+  s.watchlists = { t1: { 'dtc3-p1': { starred: true, targetPrice: 5000, note: '' } as any } };
+  const p = factoryResetPreview(s);
+  assert.equal(p.stage, 'live');
+  assert.equal(p.sold, 1);
+  assert.equal(p.unsold, 1);
+  assert.deepEqual(p.photosUnlinked, ['Padum']);
+  assert.deepEqual(p.playersEdited, ['Udit']);
+  assert.deepEqual(p.playersRemoved, ['Yatrick']);
+  assert.deepEqual(p.playersAdded, ['Guest']);
+  assert.deepEqual(p.teamsChanged, ['Underdogs goes back to Underdogs (owner Ankur, capt. Saurav)']);
+  assert.deepEqual(p.settingsChanged, [
+    'Purse per team: 25,000 → 30,000',
+    'Bid increments: +100 to 1,000 · +200 to 3,000 · +500 above → +100 to 1,000 · +200 to 3,000 · +250 above',
+  ]);
+  assert.equal(p.watchlistEntries, 1);
 });
 
 test('data migrations add the team owners to the live teams, once, leaving edited teams alone', () => {

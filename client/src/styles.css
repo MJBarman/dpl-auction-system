@@ -700,6 +700,9 @@ label.check input[type='checkbox']:focus-visible { outline: 1px dashed var(--ad-
 .notice.info { background: var(--ad-surface-alt); }
 .notice.ok { background: var(--ad-success-surface); border-left: 4px solid var(--ad-green); }
 .notice.error { background: var(--ad-error-surface); border-left: 4px solid var(--ad-red); }
+/* the factory-reset warning: one consequence per line */
+.reset-list { margin: 8px 0 12px; padding-left: 20px; }
+.reset-list li + li { margin-top: 6px; }
 
 .warnings { max-width: 1280px; margin: 0 auto; padding: 16px var(--gutter) 0; }
 .warning {

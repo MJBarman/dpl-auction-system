@@ -82,6 +82,21 @@ export interface Team {
   code: string; // private join code for the captain
 }
 
+/** What a factory reset would throw away (GET /api/admin/factory-reset/preview). */
+export interface FactoryResetPreview {
+  stage: Stage;
+  sold: number;
+  unsold: number;
+  watchlistEntries: number;  // captains' starred players and target prices
+  photosUnlinked: string[];  // players whose current photo is not the seed's
+  playersAdded: string[];    // not in the seed: deleted by the reset
+  playersRemoved: string[];  // seed players that were deleted: they come back
+  playersEdited: string[];   // seed players whose details were edited
+  teamsChanged: string[];
+  settingsChanged: string[]; // "Label: current → default"
+  teamDevices: number;       // phones signed in to a team (they stay signed in)
+}
+
 export interface Bid {
   teamId: string;
   amount: number;

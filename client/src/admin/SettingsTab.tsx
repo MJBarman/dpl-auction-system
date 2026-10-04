@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, downloadUrl } from '../api';
 import { Icon } from '../icons';
-import { IncrementRung, StateView, Tier } from '../types';
-import { maxFirstBid, useAction, useToast } from '../ui';
+import { FactoryResetPreview, IncrementRung, StateView, Tier } from '../types';
+import { maxFirstBid, Modal, useAction, useToast } from '../ui';
 
 export default function SettingsTab({ state }: { state: StateView }) {
   const run = useAction();
@@ -26,6 +26,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
     s.tiers.map((t) => ({ key: t.key, name: t.name, basePrice: String(t.basePrice), color: t.color })),
   );
   const [pin, setPin] = useState('');
+  const [factoryReset, setFactoryReset] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // "With these numbers": the form's purse, squad and reserve, with each
@@ -190,15 +191,96 @@ export default function SettingsTab({ state }: { state: StateView }) {
           }}>
             Reset auction (keep pool)
           </button>
-          <button className="btn warn" onClick={() => {
-            if (window.confirm('Factory reset? EVERYTHING returns to the original DTC Season 3 seed — teams, players, settings, codes.')) {
-              run(() => api.post('/api/admin/factory-reset', { confirm: true }), 'Factory reset done');
-            }
-          }}>
+          <button className="btn warn" onClick={() => setFactoryReset(true)}>
             Factory reset (reseed)
           </button>
         </div>
       </div>
+      {factoryReset && <FactoryResetModal state={state} onClose={() => setFactoryReset(false)} />}
     </div>
+  );
+}
+
+/** Factory reset behind the admin PIN, with everything it throws away spelled out first. */
+function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () => void }) {
+  const run = useAction();
+  const [preview, setPreview] = useState<FactoryResetPreview | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // re-check whenever the state moves, so the list never describes an older auction
+  useEffect(() => {
+    api.get<FactoryResetPreview>('/api/admin/factory-reset/preview').then(
+      (p) => { setPreview(p); setLoadError(null); },
+      (e) => setLoadError(e instanceof Error ? e.message : 'Could not check what would be lost'),
+    );
+  }, [state.version]);
+
+  const lost: string[] = [];
+  if (preview) {
+    const p = preview;
+    if (p.sold + p.unsold > 0 || p.stage !== 'setup') {
+      lost.push(`All auction results: ${p.sold} sold and ${p.unsold} unsold players, with every price. The auction goes back to Setup.`);
+    }
+    lost.push('Every player gets a new photo-upload link. Links you have already sent stop working.');
+    if (p.photosUnlinked.length > 0) {
+      lost.push(`These photos stop showing: ${p.photosUnlinked.join(', ')}. They were uploaded after the original setup; the files stay in storage, but the app no longer links them.`);
+    }
+    lost.push(`Both teams get new codes and QR join links; the old ones stop working.${p.teamDevices > 0 ? ` The ${p.teamDevices} phone${p.teamDevices === 1 ? '' : 's'} already signed in stay signed in.` : ''}`);
+    for (const t of p.teamsChanged) lost.push(`Team: ${t}.`);
+    if (p.playersAdded.length > 0) lost.push(`Players you added are deleted: ${p.playersAdded.join(', ')}.`);
+    if (p.playersRemoved.length > 0) lost.push(`Players you removed come back: ${p.playersRemoved.join(', ')}.`);
+    if (p.playersEdited.length > 0) lost.push(`Your edits to these players are lost: ${p.playersEdited.join(', ')}.`);
+    if (p.settingsChanged.length > 0) lost.push(`Settings go back to the defaults: ${p.settingsChanged.join('; ')}.`);
+    if (p.watchlistEntries > 0) lost.push(`The captains' private watchlists are cleared (${p.watchlistEntries} starred players and target prices).`);
+    lost.push('The undo history is cleared.');
+  }
+
+  const reset = () =>
+    run(async () => {
+      setBusy(true);
+      try {
+        await api.post('/api/admin/factory-reset', { confirm: true, pin: pin.trim() });
+        onClose();
+      } finally {
+        setBusy(false);
+        setPin('');
+      }
+    }, 'Factory reset done');
+
+  return (
+    <Modal title="Factory reset" onClose={onClose}>
+      <p>
+        This puts the whole app back to the original DTC Season 3 setup. It can’t be undone, and Undo doesn’t
+        cover it.
+      </p>
+      {loadError && <p className="notice error">{loadError}</p>}
+      {!preview && !loadError && <p className="muted small">Checking what would be lost…</p>}
+      {preview && (
+        <div className="notice error">
+          <b>What you lose</b>
+          <ul className="reset-list">
+            {lost.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+          <span className="muted small">Kept: the admin PIN, the event log and the photo files in storage.</span>
+        </div>
+      )}
+      <p className="muted small">Download a backup first: Restore backup can bring everything back.</p>
+      <a className="btn" href={downloadUrl('/api/admin/backup.json')} download><Icon name="download" /> Download backup (JSON)</a>
+      <form className="stack" style={{ marginTop: 16 }} onSubmit={(e) => { e.preventDefault(); if (pin.trim() && preview && !busy) reset(); }}>
+        <label>
+          Type the admin PIN to confirm
+          <input className="input" type="password" inputMode="numeric" autoComplete="off" value={pin}
+            onChange={(e) => setPin(e.target.value)} placeholder="Admin PIN" />
+        </label>
+        <div className="row end">
+          <button type="submit" className="btn warn" disabled={!pin.trim() || !preview || busy}>
+            {busy ? 'Resetting…' : 'Factory reset'}
+          </button>
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </form>
+    </Modal>
   );
 }

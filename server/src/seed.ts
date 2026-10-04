@@ -1,4 +1,4 @@
-import { Player, PlayerStats, Settings, State, Team } from './types';
+import { FactoryResetPreview, Player, PlayerStats, Settings, State, Team } from './types';
 
 // Seeded from "DTC3_Player_Categories.pdf" — the Downtown Test Championship
 // Season 3 auction (11 Oct): 24 pool players in four tiers, each with their
@@ -329,5 +329,66 @@ export function buildInitialState(): State {
     watchlists: {},
     migrations: DATA_MIGRATIONS.map((m) => m.id), // the seed above already carries everything
     version: 1,
+  };
+}
+
+/** What a factory reset would throw away, measured against a fresh seed, so the
+ *  console can spell it out before the auctioneer confirms with the PIN. */
+export function factoryResetPreview(current: State): Omit<FactoryResetPreview, 'teamDevices'> {
+  const seed = buildInitialState();
+  const num = (n: number) => n.toLocaleString('en-IN');
+  // key order and undefined fields never count as an edit
+  const canon = (v: unknown) => JSON.stringify(v, (_k, val) => (val && typeof val === 'object' && !Array.isArray(val)
+    ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => a.localeCompare(b)))
+    : val));
+
+  const tierList = (s: Settings) => [...s.tiers].sort((a, b) => a.order - b.order);
+  const rows: { label: string; show: (s: Settings) => string; sig?: (s: Settings) => string }[] = [
+    { label: 'Auction name', show: (s) => s.auctionName },
+    { label: 'Purse per team', show: (s) => num(s.purse) },
+    { label: 'Min squad', show: (s) => String(s.minSquad) },
+    { label: 'Max squad', show: (s) => String(s.maxSquad) },
+    { label: 'Reserve per slot', show: (s) => num(s.reservePerSlot) },
+    { label: 'Bid increments', show: (s) => s.increments.map((r) => `+${num(r.step)}${r.upTo === null ? ' above' : ` to ${num(r.upTo)}`}`).join(' · ') },
+    { label: 'Timeout after every … players', show: (s) => String(s.timeoutEvery) },
+    { label: 'Captains bid from their phones', show: (s) => (s.bidderBidding ? 'on' : 'off') },
+    { label: 'Show tiers', show: (s) => (s.showTier !== false ? 'on' : 'off') },
+    {
+      label: 'Tiers & base prices',
+      show: (s) => tierList(s).map((t) => `${t.name} ${num(t.basePrice)}`).join(' · '),
+      sig: (s) => canon(tierList(s).map((t) => [t.key, t.name, t.basePrice, t.color])),
+    },
+  ];
+  const settingsChanged = rows
+    .filter((r) => (r.sig ?? r.show)(current.settings) !== (r.sig ?? r.show)(seed.settings))
+    .map((r) => `${r.label}: ${r.show(current.settings)} → ${r.show(seed.settings)}`);
+
+  const seedById = new Map(seed.players.map((p) => [p.id, p]));
+  const details = (p: Player) => canon([p.name, p.role, p.tierKey, p.basePriceOverride ?? null, p.stats, p.notes, p.demandRank ?? null, !!p.sleeper]);
+  const teamsChanged: string[] = [];
+  for (const t of current.teams) {
+    const s = seed.teams.find((x) => x.id === t.id);
+    if (!s) teamsChanged.push(`${t.name} is deleted`);
+    else if (t.name !== s.name || t.captain !== s.captain || (t.owner ?? '') !== (s.owner ?? '') || t.color !== s.color) {
+      teamsChanged.push(`${t.name} goes back to ${s.name} (owner ${s.owner}, capt. ${s.captain})`);
+    }
+  }
+  for (const s of seed.teams) if (!current.teams.some((t) => t.id === s.id)) teamsChanged.push(`${s.name} comes back`);
+
+  return {
+    stage: current.stage,
+    sold: current.players.filter((p) => p.status === 'sold').length,
+    unsold: current.players.filter((p) => p.status === 'unsold').length,
+    watchlistEntries: Object.values(current.watchlists ?? {}).reduce((n, w) => n + Object.keys(w).length, 0),
+    photosUnlinked: current.players
+      .filter((p) => { const s = seedById.get(p.id); return !!s && !!p.photoPath && p.photoPath !== s.photoPath; })
+      .map((p) => p.name),
+    playersAdded: current.players.filter((p) => !seedById.has(p.id)).map((p) => p.name),
+    playersRemoved: seed.players.filter((s) => !current.players.some((p) => p.id === s.id)).map((s) => s.name),
+    playersEdited: current.players
+      .filter((p) => { const s = seedById.get(p.id); return !!s && details(s) !== details(p); })
+      .map((p) => p.name),
+    teamsChanged,
+    settingsChanged,
   };
 }

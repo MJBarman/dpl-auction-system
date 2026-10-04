@@ -129,6 +129,21 @@ export interface TimeoutInfo {
   setNumber: number | null; // which set just completed; null = called manually
 }
 
+/** What a factory reset would throw away (GET /api/admin/factory-reset/preview). */
+export interface FactoryResetPreview {
+  stage: Stage;
+  sold: number;
+  unsold: number;
+  watchlistEntries: number;
+  photosUnlinked: string[];
+  playersAdded: string[];
+  playersRemoved: string[];
+  playersEdited: string[];
+  teamsChanged: string[];
+  settingsChanged: string[];
+  teamDevices: number;
+}
+
 export interface StateView {
   serverTime: number;
   version: number;
