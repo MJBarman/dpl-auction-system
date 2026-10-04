@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, downloadUrl } from '../api';
 import { Icon } from '../icons';
-import { FactoryResetPreview, IncrementRung, StateView, Tier } from '../types';
+import { FactoryResetPreview, IncrementRung, Stage, StateView, Tier } from '../types';
 import { maxFirstBid, Modal, useAction, useToast } from '../ui';
 
 export default function SettingsTab({ state }: { state: StateView }) {
@@ -26,7 +26,8 @@ export default function SettingsTab({ state }: { state: StateView }) {
     s.tiers.map((t) => ({ key: t.key, name: t.name, basePrice: String(t.basePrice), color: t.color })),
   );
   const [pin, setPin] = useState('');
-  const [factoryReset, setFactoryReset] = useState(false);
+  const [danger, setDanger] = useState<'auction' | 'factory' | null>(null);
+  const [backup, setBackup] = useState<{ name: string; file: BackupFile } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // "With these numbers": the form's purse, squad and reserve, with each
@@ -63,15 +64,15 @@ export default function SettingsTab({ state }: { state: StateView }) {
       await api.put('/api/admin/settings', body);
     }, 'Settings saved');
 
+  // Read the chosen file, then let RestoreModal spell out the swap and take the PIN.
   const restore = async (file: File) => {
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      if (!window.confirm('Restore this backup? The current auction state will be replaced.')) return;
-      await api.post('/api/admin/restore', { state: parsed.state ?? parsed });
-      toast('Backup restored', 'ok');
+      const parsed = JSON.parse(await file.text());
+      const st = parsed?.state ?? parsed;
+      if (!st || !Array.isArray(st.players) || !Array.isArray(st.teams) || !st.settings) throw new Error('Not a valid backup file');
+      setBackup({ name: file.name, file: { exportedAt: parsed?.exportedAt, state: st } });
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Restore failed');
+      toast(e instanceof SyntaxError ? 'Not a valid backup file' : e instanceof Error ? e.message : 'Could not read the file');
     } finally {
       if (fileRef.current) fileRef.current.value = '';
     }
@@ -184,30 +185,129 @@ export default function SettingsTab({ state }: { state: StateView }) {
       <div className="card danger">
         <h3>Danger zone</h3>
         <div className="row wrap">
-          <button className="btn warn" onClick={() => {
-            if (window.confirm('Reset the auction? All sales are cleared; players, teams and settings are kept.')) {
-              run(() => api.post('/api/admin/auction/reset', { confirm: true }), 'Auction reset');
-            }
-          }}>
+          <button className="btn warn" onClick={() => setDanger('auction')}>
             Reset auction (keep pool)
           </button>
-          <button className="btn warn" onClick={() => setFactoryReset(true)}>
+          <button className="btn warn" onClick={() => setDanger('factory')}>
             Factory reset (reseed)
           </button>
         </div>
+        <p className="muted small">Each of these, and Restore backup, asks for the admin PIN and lists what it would wipe first.</p>
       </div>
-      {factoryReset && <FactoryResetModal state={state} onClose={() => setFactoryReset(false)} />}
+      {danger === 'auction' && <AuctionResetModal state={state} onClose={() => setDanger(null)} />}
+      {danger === 'factory' && <FactoryResetModal state={state} onClose={() => setDanger(null)} />}
+      {backup && <RestoreModal state={state} name={backup.name} backup={backup.file} onClose={() => setBackup(null)} />}
     </div>
   );
 }
 
-/** Factory reset behind the admin PIN, with everything it throws away spelled out first. */
-function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () => void }) {
+type BackupState = {
+  stage: Stage;
+  settings: StateView['settings'];
+  players: { id: string; name: string; status: string; photoPath?: string | null; photoCode?: string }[];
+  teams: { id: string; name: string; captain: string; owner?: string; code?: string }[];
+};
+type BackupFile = { exportedAt?: number; state: BackupState };
+
+const STAGE_NAME: Record<Stage, string> = { setup: 'Setup', live: 'Live', accelerated: 'Accelerated round', completed: 'Completed' };
+const countStatus = (players: { status: string }[], status: string) => players.filter((p) => p.status === status).length;
+// key order never counts as a difference
+const canon = (v: unknown) => JSON.stringify(v, (_k, val) => (val && typeof val === 'object' && !Array.isArray(val)
+  ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => a.localeCompare(b)))
+  : val));
+
+/**
+ * A wiping action behind the admin PIN: what it throws away is spelled out
+ * first, with a backup download, and the server checks the PIN again.
+ */
+function DangerPinModal({ title, intro, heading = 'What you lose', lines, loadError, kept, action, okMessage, onConfirm, onClose }: {
+  title: string;
+  intro: string;
+  heading?: string;
+  lines: string[] | null; // null while the details load
+  loadError?: string | null;
+  kept: string;
+  action: string;
+  okMessage: string;
+  onConfirm: (pin: string) => Promise<unknown>;
+  onClose: () => void;
+}) {
   const run = useAction();
-  const [preview, setPreview] = useState<FactoryResetPreview | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
+  const ready = !!lines && !busy;
+
+  const confirm = () =>
+    run(async () => {
+      setBusy(true);
+      try {
+        await onConfirm(pin.trim());
+        onClose();
+      } finally {
+        setBusy(false);
+        setPin('');
+      }
+    }, okMessage);
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <p>{intro}</p>
+      {loadError && <p className="notice error">{loadError}</p>}
+      {!lines && !loadError && <p className="muted small">Checking what would be lost…</p>}
+      {lines && (
+        <div className="notice error">
+          <b>{heading}</b>
+          <ul className="reset-list">
+            {lines.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+          <span className="muted small">{kept}</span>
+        </div>
+      )}
+      <p className="muted small">Download a backup first: Restore backup can bring everything back.</p>
+      <a className="btn" href={downloadUrl('/api/admin/backup.json')} download><Icon name="download" /> Download backup (JSON)</a>
+      <form className="stack" style={{ marginTop: 16 }} onSubmit={(e) => { e.preventDefault(); if (pin.trim() && ready) confirm(); }}>
+        <label>
+          Type the admin PIN to confirm
+          <input className="input" type="password" inputMode="numeric" autoComplete="off" value={pin}
+            onChange={(e) => setPin(e.target.value)} placeholder="Admin PIN" />
+        </label>
+        <div className="row end">
+          <button type="submit" className="btn warn" disabled={!pin.trim() || !ready}>
+            {busy ? 'Working…' : action}
+          </button>
+          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Reset auction: every sale cleared, the pool and everything else kept. */
+function AuctionResetModal({ state, onClose }: { state: StateView; onClose: () => void }) {
+  const sold = countStatus(state.players, 'sold');
+  const unsold = countStatus(state.players, 'unsold');
+  const lines: string[] = [];
+  if (sold + unsold > 0) {
+    lines.push(`All auction results: ${sold} sold and ${unsold} unsold players, with every price. Every player goes back into the pool.`);
+  } else {
+    lines.push('No player has been auctioned yet, so no results are lost.');
+  }
+  lines.push(`The auction goes back to Setup${state.lot ? ', and the player on the block comes down' : ''}${state.timeout ? '; the strategic timeout ends' : ''}.`);
+  lines.push('The undo history is cleared.');
+  return (
+    <DangerPinModal title="Reset auction" onClose={onClose}
+      intro="This clears every sale and starts the auction again from the first draw. It can’t be undone, and Undo doesn’t cover it."
+      lines={lines}
+      kept="Kept: the teams and their codes, the players with their photos and photo links, the settings, and the captains’ watchlists."
+      action="Reset auction" okMessage="Auction reset"
+      onConfirm={(pin) => api.post('/api/admin/auction/reset', { confirm: true, pin })} />
+  );
+}
+
+/** Factory reset: everything back to the original DTC Season 3 seed. */
+function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () => void }) {
+  const [preview, setPreview] = useState<FactoryResetPreview | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // re-check whenever the state moves, so the list never describes an older auction
   useEffect(() => {
@@ -217,70 +317,72 @@ function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () =
     );
   }, [state.version]);
 
-  const lost: string[] = [];
+  let lines: string[] | null = null;
   if (preview) {
     const p = preview;
+    lines = [];
     if (p.sold + p.unsold > 0 || p.stage !== 'setup') {
-      lost.push(`All auction results: ${p.sold} sold and ${p.unsold} unsold players, with every price. The auction goes back to Setup.`);
+      lines.push(`All auction results: ${p.sold} sold and ${p.unsold} unsold players, with every price. The auction goes back to Setup.`);
     }
-    lost.push('Every player gets a new photo-upload link. Links you have already sent stop working.');
+    lines.push('Every player gets a new photo-upload link. Links you have already sent stop working.');
     if (p.photosUnlinked.length > 0) {
-      lost.push(`These photos stop showing: ${p.photosUnlinked.join(', ')}. They were uploaded after the original setup; the files stay in storage, but the app no longer links them.`);
+      lines.push(`These photos stop showing: ${p.photosUnlinked.join(', ')}. They were uploaded after the original setup; the files stay in storage, but the app no longer links them.`);
     }
-    lost.push(`Both teams get new codes and QR join links; the old ones stop working.${p.teamDevices > 0 ? ` The ${p.teamDevices} phone${p.teamDevices === 1 ? '' : 's'} already signed in stay signed in.` : ''}`);
-    for (const t of p.teamsChanged) lost.push(`Team: ${t}.`);
-    if (p.playersAdded.length > 0) lost.push(`Players you added are deleted: ${p.playersAdded.join(', ')}.`);
-    if (p.playersRemoved.length > 0) lost.push(`Players you removed come back: ${p.playersRemoved.join(', ')}.`);
-    if (p.playersEdited.length > 0) lost.push(`Your edits to these players are lost: ${p.playersEdited.join(', ')}.`);
-    if (p.settingsChanged.length > 0) lost.push(`Settings go back to the defaults: ${p.settingsChanged.join('; ')}.`);
-    if (p.watchlistEntries > 0) lost.push(`The captains' private watchlists are cleared (${p.watchlistEntries} starred players and target prices).`);
-    lost.push('The undo history is cleared.');
+    lines.push(`Both teams get new codes and QR join links; the old ones stop working.${p.teamDevices > 0 ? ` The ${p.teamDevices} phone${p.teamDevices === 1 ? '' : 's'} already signed in stay signed in.` : ''}`);
+    for (const t of p.teamsChanged) lines.push(`Team: ${t}.`);
+    if (p.playersAdded.length > 0) lines.push(`Players you added are deleted: ${p.playersAdded.join(', ')}.`);
+    if (p.playersRemoved.length > 0) lines.push(`Players you removed come back: ${p.playersRemoved.join(', ')}.`);
+    if (p.playersEdited.length > 0) lines.push(`Your edits to these players are lost: ${p.playersEdited.join(', ')}.`);
+    if (p.settingsChanged.length > 0) lines.push(`Settings go back to the defaults: ${p.settingsChanged.join('; ')}.`);
+    if (p.watchlistEntries > 0) lines.push(`The captains' private watchlists are cleared (${p.watchlistEntries} starred players and target prices).`);
+    lines.push('The undo history is cleared.');
   }
 
-  const reset = () =>
-    run(async () => {
-      setBusy(true);
-      try {
-        await api.post('/api/admin/factory-reset', { confirm: true, pin: pin.trim() });
-        onClose();
-      } finally {
-        setBusy(false);
-        setPin('');
-      }
-    }, 'Factory reset done');
-
   return (
-    <Modal title="Factory reset" onClose={onClose}>
-      <p>
-        This puts the whole app back to the original DTC Season 3 setup. It can’t be undone, and Undo doesn’t
-        cover it.
-      </p>
-      {loadError && <p className="notice error">{loadError}</p>}
-      {!preview && !loadError && <p className="muted small">Checking what would be lost…</p>}
-      {preview && (
-        <div className="notice error">
-          <b>What you lose</b>
-          <ul className="reset-list">
-            {lost.map((line) => <li key={line}>{line}</li>)}
-          </ul>
-          <span className="muted small">Kept: the admin PIN, the event log and the photo files in storage.</span>
-        </div>
-      )}
-      <p className="muted small">Download a backup first: Restore backup can bring everything back.</p>
-      <a className="btn" href={downloadUrl('/api/admin/backup.json')} download><Icon name="download" /> Download backup (JSON)</a>
-      <form className="stack" style={{ marginTop: 16 }} onSubmit={(e) => { e.preventDefault(); if (pin.trim() && preview && !busy) reset(); }}>
-        <label>
-          Type the admin PIN to confirm
-          <input className="input" type="password" inputMode="numeric" autoComplete="off" value={pin}
-            onChange={(e) => setPin(e.target.value)} placeholder="Admin PIN" />
-        </label>
-        <div className="row end">
-          <button type="submit" className="btn warn" disabled={!pin.trim() || !preview || busy}>
-            {busy ? 'Resetting…' : 'Factory reset'}
-          </button>
-          <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        </div>
-      </form>
-    </Modal>
+    <DangerPinModal title="Factory reset" onClose={onClose}
+      intro="This puts the whole app back to the original DTC Season 3 setup. It can’t be undone, and Undo doesn’t cover it."
+      lines={lines} loadError={loadError}
+      kept="Kept: the admin PIN, the event log and the photo files in storage."
+      action="Factory reset" okMessage="Factory reset done"
+      onConfirm={(pin) => api.post('/api/admin/factory-reset', { confirm: true, pin })} />
+  );
+}
+
+/** Restore backup: the whole app becomes the file's copy. */
+function RestoreModal({ state, name, backup, onClose }: { state: StateView; name: string; backup: BackupFile; onClose: () => void }) {
+  const b = backup.state;
+  const lines: string[] = [];
+  const saved = backup.exportedAt
+    ? `, saved ${new Date(backup.exportedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}`
+    : '';
+  lines.push(`Everything in the app now is replaced by this backup${saved}.`);
+  lines.push(`Auction: now ${STAGE_NAME[state.stage]} with ${countStatus(state.players, 'sold')} sold and ${countStatus(state.players, 'unsold')} unsold; the backup has ${STAGE_NAME[b.stage] ?? b.stage} with ${countStatus(b.players, 'sold')} sold and ${countStatus(b.players, 'unsold')} unsold.`);
+  if (b.players.length !== state.players.length || canon(b.players.map((p) => p.name)) !== canon(state.players.map((p) => p.name))) {
+    lines.push(`Players: ${state.players.length} now, ${b.players.length} in the backup.`);
+  }
+  const photosNow = state.players.filter((p) => p.photoUrl).length;
+  const photosThen = b.players.filter((p) => p.photoPath).length;
+  if (photosNow !== photosThen) lines.push(`Photos: ${photosNow} players have one now, ${photosThen} in the backup.`);
+  const teamSig = (t: { name: string; captain: string; owner?: string }) => [t.name, t.captain, t.owner ?? ''];
+  if (canon(b.teams.map(teamSig)) !== canon(state.teams.map(teamSig))) {
+    lines.push(`Teams become the backup's: ${b.teams.map((t) => t.name).join(', ')}.`);
+  }
+  const teamCodes = state.admin?.teamCodes ?? [];
+  const newCodes = b.teams.filter((t) => teamCodes.find((c) => c.teamId === t.id)?.code !== t.code).map((t) => t.name);
+  if (newCodes.length > 0) lines.push(`Team codes and QR join links change for ${newCodes.join(', ')}: the current ones stop working.`);
+  const photoCodes = state.admin?.photoCodes ?? [];
+  const newLinks = b.players.filter((p) => photoCodes.find((c) => c.playerId === p.id)?.code !== p.photoCode).length;
+  if (newLinks > 0) lines.push(`${newLinks} photo-upload link${newLinks === 1 ? '' : 's'} change: links sent since this backup stop working.`);
+  const { rulesOnScreen: _nowRules, ...nowSettings } = state.settings;
+  const { rulesOnScreen: _thenRules, ...thenSettings } = b.settings;
+  if (canon(nowSettings) !== canon(thenSettings)) lines.push('Settings become the backup’s.');
+  lines.push('The undo history is cleared.');
+  return (
+    <DangerPinModal title="Restore backup" onClose={onClose} heading="What changes"
+      intro={`This replaces everything in the app with the backup file “${name}”. It can’t be undone, and Undo doesn’t cover it.`}
+      lines={lines}
+      kept="Kept: the admin PIN and the event log."
+      action="Restore backup" okMessage="Backup restored"
+      onConfirm={(pin) => api.post('/api/admin/restore', { state: b, pin })} />
   );
 }

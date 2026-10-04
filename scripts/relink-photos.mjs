@@ -153,7 +153,7 @@ console.log('\n→ Restoring patched state …');
 const restoreRes = await request(`${APP_URL}/api/admin/restore`, {
   method: 'POST',
   headers: { ...auth, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ state }),
+  body: JSON.stringify({ state, pin: ADMIN_PIN }), // restore takes the PIN again
 });
 if (!restoreRes.ok) fail(`Restore failed (${restoreRes.status}): ${await restoreRes.text()}`);
 console.log(`✓ Done — ${linked.length} photo(s) re-linked. Reload the app to see them.`);

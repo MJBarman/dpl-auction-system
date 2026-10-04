@@ -162,6 +162,17 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   const teamName = (id: string | null | undefined) =>
     store.state.teams.find((t) => t.id === id)?.name ?? id ?? '?';
 
+  // The wiping actions (auction reset, factory reset, restore) take the admin PIN
+  // again even on a signed-in console; attempts are rate-limited like sign-in.
+  const pinAgainLimiter = loginRateLimiter(5);
+  function requirePinAgain(req: Request, action: string, refusal: string): void {
+    const pin = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
+    if (!pin || !safeEqual(pin, getPin())) {
+      store.logEvent('auth', `${action} refused — wrong PIN`);
+      throw new AuctionError(`Wrong PIN — ${refusal}`, 403);
+    }
+  }
+
   // ---- auth ----
   router.post('/auth/admin', loginRateLimiter(), (req, res) => {
     const pin = str(req.body?.pin, 'PIN', { max: 64 });
@@ -640,8 +651,9 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ ok: true });
   });
 
-  router.post('/admin/auction/reset', requireAdmin, (req, res) => {
+  router.post('/admin/auction/reset', requireAdmin, pinAgainLimiter, (req, res) => {
     if (req.body?.confirm !== true) throw new AuctionError('Pass confirm: true to reset the auction');
+    requirePinAgain(req, 'Auction reset', 'nothing was reset');
     mutate(null, 'auction', () => {
       engine.resetAuction(store.state);
       store.clearUndo();
@@ -654,15 +666,9 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ ...factoryResetPreview(store.state), teamDevices });
   });
 
-  // A factory reset wipes everything, so it takes the admin PIN again even on a
-  // signed-in console, rate-limited like the sign-in.
-  router.post('/admin/factory-reset', requireAdmin, loginRateLimiter(5), (req, res) => {
+  router.post('/admin/factory-reset', requireAdmin, pinAgainLimiter, (req, res) => {
     if (req.body?.confirm !== true) throw new AuctionError('Pass confirm: true to factory-reset');
-    const pin = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
-    if (!pin || !safeEqual(pin, getPin())) {
-      store.logEvent('auth', 'Factory reset refused — wrong PIN');
-      throw new AuctionError('Wrong PIN — nothing was reset', 403);
-    }
+    requirePinAgain(req, 'Factory reset', 'nothing was reset');
     const fresh = buildInitialState();
     // Keep versions monotonic so clients never mistake the reset for stale state.
     fresh.version = (store.state.version ?? 0) + 1;
@@ -715,7 +721,8 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ exportedAt: Date.now(), state: store.state, events: store.allEvents() });
   });
 
-  router.post('/admin/restore', requireAdmin, (req, res) => {
+  router.post('/admin/restore', requireAdmin, pinAgainLimiter, (req, res) => {
+    requirePinAgain(req, 'Restore', 'nothing was restored');
     const body = req.body ?? {};
     const state = body.state as State | undefined;
     if (!state || !Array.isArray(state.players) || !Array.isArray(state.teams) || !state.settings) {
