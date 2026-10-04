@@ -11,35 +11,37 @@
    ========================================================================== */
 
 .scr-page {
-  --bg-0: #05080f;
-  --bg-1: #0a1120;
-  --bg-2: #111c33;
-  --line: #1e2a44;
-  --hi: #f4f7ff;
-  --mid: #8fa3c8;
-  --gold: #fbbf24;
-  --gold-hi: #ffe9a8;
-  --gold-deep: #b8860b;
-  --danger: #ff2e4d;
-  --steel: #64748b;
-  /* Recurring surface tones, pulled into variables so the light theme (further
-     down) can re-skin the whole broadcast from one place. */
-  --panel: rgba(10, 17, 32, 0.85);       /* glass cards: stats, feed rows */
-  --panel-strong: rgba(10, 17, 32, 0.9); /* signings, purse & roster cards */
-  --fuel-track: rgba(30, 42, 68, 0.8);   /* purse / progress-bar troughs */
-  --tex: 255, 255, 255;                  /* ambient texture ink (beams, grid, sheen, watermark) */
-  --vignette: rgba(0, 0, 0, 0.55);       /* edge darkening around the arena */
-  --ambient-top: #0d1730;                /* soft dome glow at the top of the arena */
-  --head-1: #0d1526;                     /* header bar gradient */
-  --head-2: #0a1120;
-  --gold-glow: rgba(251, 191, 36, 0.28); /* halo behind the live bid amount */
-  --live: #4ade80;      /* LIVE indicator + purse refund delta */
-  --live-off: #fca5a5;  /* OFFLINE label */
-  --font-display: 'Anton', 'Arial Narrow', Impact, sans-serif;
-  --font-body: 'Archivo', 'Segoe UI', system-ui, sans-serif;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-wipe: cubic-bezier(0.83, 0, 0.17, 1);
+  /* tokens.css §D: the projector bridge. Money goes monochrome (white on
+     black, black on white) and mint is kept for the ring and the SOLD moment.
+     These read the --ad-* tokens from styles.css, so both themes follow
+     html[data-theme] with no separate light block. */
+  --bg-0: var(--ad-page);
+  --bg-1: var(--ad-page);
+  --bg-2: var(--ad-surface-alt);
+  --line: var(--ad-divider);
+  --hi: var(--ad-text);
+  --mid: var(--ad-text-2);
+  --gold: var(--ad-text);
+  --gold-hi: var(--ad-text);
+  --gold-deep: var(--ad-text-2);
+  --danger: var(--ad-red);
+  --steel: var(--ad-grey-500);     /* unused today; kept so nothing dangles */
+  --panel: var(--ad-surface-alt);
+  --panel-strong: var(--ad-surface-alt);
+  --fuel-track: var(--ad-divider);
+  --tex: var(--ad-text-rgb);
+  --vignette: transparent;
+  --ambient-top: var(--ad-page);
+  --head-1: var(--ad-page);
+  --head-2: var(--ad-page);
+  --gold-glow: transparent;        /* no glows in this language */
+  --live: var(--ad-live);
+  --live-off: var(--ad-red);
+  --font-display: var(--ad-font-display);
+  --font-body: var(--ad-font-body);
+  --ease-out: var(--ad-ease);
+  --ease-pop: var(--ad-ease);      /* no overshoot: adidas motion is decisive, not bouncy */
+  --ease-wipe: var(--ad-ease);
 
   position: relative;
   display: flex;
@@ -51,35 +53,6 @@
   font-family: var(--font-body);
 }
 .scr-page b { font-weight: 700; }
-
-/* ---------- light mode: "stadium daylight" broadcast ----------
-   A clean warm-white arena with ink-navy type. The signature gold is shifted
-   to a deep bronze-amber so the money numbers still read as premium on white.
-   Team colors, the tier accent, and the SOLD/UNSOLD takeover are theme-neutral
-   (the takeover stays a dark cinematic sting on purpose) and are left alone. */
-:root[data-theme='light'] .scr-page {
-  --bg-0: #e9edf5;
-  --bg-1: #eef2f9;
-  --bg-2: #ffffff;
-  --line: #d3dbea;
-  --hi: #141b2e;
-  --mid: #5b6a86;
-  --gold: #b45309;
-  --gold-hi: #d97706;
-  --gold-deep: #78350f;
-  --danger: #e11d48;
-  --panel: rgba(255, 255, 255, 0.82);
-  --panel-strong: rgba(255, 255, 255, 0.96);
-  --fuel-track: rgba(20, 30, 55, 0.12);
-  --tex: 24, 34, 66;
-  --vignette: rgba(70, 90, 130, 0.12);
-  --ambient-top: #ffffff;
-  --head-1: #ffffff;
-  --head-2: #eef2f9;
-  --gold-glow: rgba(180, 83, 9, 0.20);
-  --live: #15803d;
-  --live-off: #dc2626;
-}
 /* Self-contained saturated chip that would wash out on white — the only badge
    whose ink/fill both need re-tuning for the light arena. */
 :root[data-theme='light'] .scr-badge.sleeper {
