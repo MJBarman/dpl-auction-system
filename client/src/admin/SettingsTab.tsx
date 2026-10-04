@@ -112,7 +112,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
 
       <div className="card">
         <h3>Bid increments</h3>
-        <p className="muted small">Leave the last threshold empty for “and above”. Plan default: +100 to 1,000 · +200 to 3,000 · +500 above.</p>
+        <p className="muted small">Leave the last threshold empty for “and above”. Plan default: +100 to 1,000 · +200 to 3,000 · +250 above.</p>
         {increments.map((r, i) => (
           <div className="row" key={i}>
             <span className="muted small rung-label">+{r.step || '?'} up to</span>

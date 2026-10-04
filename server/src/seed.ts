@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: Settings = {
   increments: [
     { upTo: 1000, step: 100 },
     { upTo: 3000, step: 200 },
-    { upTo: null, step: 500 },
+    { upTo: null, step: 250 },
   ],
   bidderBidding: true,
   timeoutEvery: 8, // strategic timeout after every 8 main-round players (0 = off)
@@ -263,6 +263,18 @@ const DATA_MIGRATIONS: { id: string; run: (state: State) => void }[] = [
         const t = state.teams.find((x) => x.id === src.id);
         if (t && t.name === src.name && !t.owner) t.owner = src.owner;
       }
+    },
+  },
+  {
+    // The organisers cut the step above 3,000 from +500 to +250. Only from the
+    // untouched ladder and before the auction starts, so a ladder the
+    // auctioneer edited is kept and steps never change mid-auction.
+    id: 'dtc3-step-250-above-3000',
+    run: (state) => {
+      const old = [{ upTo: 1000, step: 100 }, { upTo: 3000, step: 200 }, { upTo: null, step: 500 }];
+      const inc = state.settings.increments;
+      const untouched = inc.length === old.length && inc.every((r, i) => r.upTo === old[i].upTo && r.step === old[i].step);
+      if (untouched && state.stage === 'setup') inc[2].step = 250;
     },
   },
 ];

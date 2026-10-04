@@ -191,6 +191,21 @@ test('the reserve moves to base prices (0) only from an untouched 400, with the 
   assert.equal(run(10000, 400), 400, 'not the old 10,000-purse setup');
 });
 
+test('the step above 3,000 drops from +500 to +250 only on the untouched ladder, before the auction starts', () => {
+  const run = (ladder: { upTo: number | null; step: number }[], stage: 'setup' | 'live' = 'setup') => {
+    const s = fresh();
+    s.migrations = s.migrations!.filter((id) => id !== 'dtc3-step-250-above-3000');
+    s.settings.increments = ladder;
+    s.stage = stage;
+    applyDataMigrations(s);
+    return s.settings.increments.map((r) => r.step);
+  };
+  const old = () => [{ upTo: 1000, step: 100 }, { upTo: 3000, step: 200 }, { upTo: null, step: 500 }];
+  assert.deepEqual(run(old()), [100, 200, 250], 'the live site today');
+  assert.deepEqual(run(old(), 'live'), [100, 200, 500], 'never mid-auction');
+  assert.deepEqual(run([{ upTo: 1000, step: 100 }, { upTo: null, step: 500 }]), [100, 500], 'an edited ladder is kept');
+});
+
 test('data migrations add the team owners to the live teams, once, leaving edited teams alone', () => {
   const s = fresh();
   s.migrations = s.migrations!.filter((id) => id !== 'dtc3-team-owners');
@@ -232,14 +247,14 @@ test('DTC 3 reuses the DPL photos of the 14 returning players that still have on
 
 // ---- increment ladder -------------------------------------------------------
 
-test('increment ladder matches the auction plan (+100 to 1000, +200 to 3000, +500 above)', () => {
+test('increment ladder matches the auction plan (+100 to 1000, +200 to 3000, +250 above)', () => {
   const s = fresh();
   assert.equal(engine.stepFor(s.settings, 200), 100);
   assert.equal(engine.stepFor(s.settings, 999), 100);
   assert.equal(engine.stepFor(s.settings, 1000), 200);
   assert.equal(engine.stepFor(s.settings, 2999), 200);
-  assert.equal(engine.stepFor(s.settings, 3000), 500);
-  assert.equal(engine.stepFor(s.settings, 9000), 500);
+  assert.equal(engine.stepFor(s.settings, 3000), 250);
+  assert.equal(engine.stepFor(s.settings, 9000), 250);
 });
 
 test('nextMinBid opens at base price then climbs the ladder', () => {
@@ -251,7 +266,9 @@ test('nextMinBid opens at base price then climbs the ladder', () => {
   assert.equal(s.lot!.bids[0].amount, 1000);
   assert.equal(engine.nextMinBid(s), 1200); // 1000 + 200
   engine.placeBid(s, 't2', 3000, 'admin', 2); // jump bid allowed
-  assert.equal(engine.nextMinBid(s), 3500); // 3000 + 500
+  assert.equal(engine.nextMinBid(s), 3250); // 3000 + 250
+  engine.placeBid(s, 't1', undefined, 'admin', 3);
+  assert.equal(engine.nextMinBid(s), 3500); // 3250 + 250
 });
 
 // ---- purse guardrail ----------------------------------------------------------
