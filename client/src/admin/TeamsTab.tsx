@@ -53,7 +53,7 @@ function TeamCard({ state, team }: { state: StateView; team: TeamView }) {
         <h3 style={{ color: team.color }}>{team.name}</h3>
         <button className="btn ghost" onClick={() => setEditing(true)}>Edit</button>
       </div>
-      <div className="muted">Captain: {team.captain || '—'}</div>
+      <div className="muted">Owner: {team.owner || '—'} · Captain: {team.captain || '—'}</div>
       <div className="team-money">
         <span>Spent {fmt(team.spent)}</span>
         <span>Left {fmt(team.remaining)}</span>
@@ -101,6 +101,7 @@ function TeamModal({ team, onClose }: { team?: TeamView; onClose: () => void }) 
   const [form, setForm] = useState({
     name: team?.name ?? '',
     captain: team?.captain ?? '',
+    owner: team?.owner ?? '',
     color: team?.color ?? '#64748b',
   });
 
@@ -123,6 +124,7 @@ function TeamModal({ team, onClose }: { team?: TeamView; onClose: () => void }) 
     <Modal title={team ? `Edit ${team.name}` : 'Add team'} onClose={onClose}>
       <div className="form-grid">
         <label>Team name<input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+        <label>Owner<input className="input" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label>
         <label>Captain<input className="input" value={form.captain} onChange={(e) => setForm({ ...form, captain: e.target.value })} /></label>
         <label>Colour<input className="input color" type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} /></label>
       </div>

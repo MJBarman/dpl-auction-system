@@ -72,6 +72,7 @@ export interface TeamView {
   id: string;
   name: string;
   captain: string;
+  owner: string;
   color: string;
   purse: number;
   spent: number;

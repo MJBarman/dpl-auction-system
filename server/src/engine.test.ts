@@ -38,11 +38,11 @@ test('DTC 3 pool: 24 players — 2 Diamond, 4 Gold, 12 Emerald, 6 New', () => {
   assert.equal(new Set(s.players.map((p) => p.id)).size, 24, 'player ids are unique');
 });
 
-test('DTC 3 teams: Power Rangers (Ashish) and Underdogs (Saurav); captains are not in the pool', () => {
+test('DTC 3 teams: Power Rangers (owner Angshumaan, capt. Ashish) and Underdogs (owner Ankur, capt. Saurav); captains are not in the pool', () => {
   const s = fresh();
   assert.deepEqual(
-    s.teams.map((t) => [t.id, t.name, t.captain]),
-    [['t1', 'Power Rangers', 'Ashish'], ['t2', 'Underdogs', 'Saurav']],
+    s.teams.map((t) => [t.id, t.name, t.owner, t.captain]),
+    [['t1', 'Power Rangers', 'Angshumaan', 'Ashish'], ['t2', 'Underdogs', 'Ankur', 'Saurav']],
   );
   for (const t of s.teams) assert.ok(!s.players.some((p) => p.name === t.captain), `${t.captain} is not for sale`);
 });
@@ -189,6 +189,20 @@ test('the reserve moves to base prices (0) only from an untouched 400, with the 
   assert.equal(run(30000, 1000), 1000, 'a 1,000 the auctioneer chose is kept');
   assert.equal(run(30000, 600), 600, 'a reserve the auctioneer chose is kept');
   assert.equal(run(10000, 400), 400, 'not the old 10,000-purse setup');
+});
+
+test('data migrations add the team owners to the live teams, once, leaving edited teams alone', () => {
+  const s = fresh();
+  s.migrations = s.migrations!.filter((id) => id !== 'dtc3-team-owners');
+  for (const t of s.teams) delete t.owner; // the live teams predate the owner field
+  s.teams[1].name = 'Renamed';
+  assert.equal(applyDataMigrations(s), true);
+  assert.deepEqual(s.teams.map((t) => t.owner), ['Angshumaan', undefined]);
+  // An owner typed in afterwards is never overwritten.
+  s.teams[0].owner = 'Someone';
+  s.migrations = s.migrations!.filter((id) => id !== 'dtc3-team-owners');
+  applyDataMigrations(s);
+  assert.equal(s.teams[0].owner, 'Someone');
 });
 
 test('DTC 3 settings: squads of exactly 12 clear the pool with no feasibility warnings', () => {

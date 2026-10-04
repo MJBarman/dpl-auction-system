@@ -816,6 +816,10 @@
   letter-spacing: 0.05em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.scr-cell-owner { /* "Owner X" after the team name, quieter than the name */
+  margin-left: 0.7em; font-family: var(--font-body); font-weight: 600;
+  font-size: 0.72em; letter-spacing: 0.06em; opacity: 0.75;
+}
 .scr-purse-row { display: flex; align-items: baseline; gap: 10px; }
 .scr-purse { /* keyed-by: purse value — flips down on change */
   font-weight: 800; font-size: clamp(20px, min(2.4vw, 4.2vh), 34px);

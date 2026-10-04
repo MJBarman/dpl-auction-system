@@ -22,6 +22,11 @@ function rgbTriplet(hex: string): string {
   return `${n >> 16}, ${(n >> 8) & 255}, ${n & 255}`;
 }
 
+/** "Owner X · Capt. Y" for the team heads on the timeout and final boards. */
+function ownerAndCaptain(t: TeamView): string {
+  return [t.owner && `Owner ${t.owner}`, t.captain && `Capt. ${t.captain}`].filter(Boolean).join(' · ');
+}
+
 /** Light team colors (amber, emerald, the gold tier) need near-black ink on top —
  *  white text blooms unreadably on a projector over those fills. */
 function darkInk(hex?: string | null): boolean {
@@ -762,7 +767,7 @@ function TimeoutBoard({ state }: { state: StateView }) {
             >
               <div className={`scr-final-head${darkInk(team.color) ? ' dark-ink' : ''}`} style={vars({ '--i': ci })}>
                 <h3>{team.name}</h3>
-                <div className="cap">Capt. {team.captain}</div>
+                <div className="cap">{ownerAndCaptain(team)}</div>
               </div>
               <div className="scr-to-purse">
                 <div className="row1">
@@ -822,7 +827,10 @@ function TeamsFooter({ state, leadingId, prevPurse }: {
             style={vars({ '--team': t.color, '--team-rgb': rgbTriplet(t.color) })}
           >
             <div className="scr-cell-main">
-              <div className="scr-cell-name">{t.name}</div>
+              <div className="scr-cell-name">
+                {t.name}
+                {t.owner && <span className="scr-cell-owner">Owner {t.owner}</span>}
+              </div>
               <div className="scr-purse-row">
                 <span className="scr-purse" key={t.remaining}>{fmt(t.remaining)}</span>
                 {delta !== 0 && (
@@ -1015,7 +1023,7 @@ function FinalBoard({ state }: { state: StateView }) {
               <div className={`scr-final-head${darkInk(t.color) ? ' dark-ink' : ''}`} style={vars({ '--i': ci })}>
                 <h3>{t.name}</h3>
                 {/* the purse footer is off this board — leftover points are worth nothing, so say so */}
-                <div className="cap">Capt. {t.captain} · spent {fmt(t.spent)} · {fmt(t.remaining)} unspent</div>
+                <div className="cap">{ownerAndCaptain(t)} · spent {fmt(t.spent)} · {fmt(t.remaining)} unspent</div>
               </div>
               <div className="scr-final-rows">
                 {squad.length === 0 && <div className="scr-final-empty">No players signed</div>}

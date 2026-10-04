@@ -38,8 +38,8 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 const TEAM_SEED: Omit<Team, 'code'>[] = [
-  { id: 't1', name: 'Power Rangers', captain: 'Ashish', color: '#f43f5e' },
-  { id: 't2', name: 'Underdogs', captain: 'Saurav', color: '#3b82f6' },
+  { id: 't1', name: 'Power Rangers', captain: 'Ashish', owner: 'Angshumaan', color: '#f43f5e' },
+  { id: 't2', name: 'Underdogs', captain: 'Saurav', owner: 'Ankur', color: '#3b82f6' },
 ];
 
 interface PlayerSeed {
@@ -252,6 +252,17 @@ const DATA_MIGRATIONS: { id: string; run: (state: State) => void }[] = [
       const r = state.settings.reservePerSlot;
       const untouched = r === 400 || (r === 1000 && state.migrations?.includes('dtc3-reserve-1000'));
       if (state.settings.purse === 30000 && untouched) state.settings.reservePerSlot = 0;
+    },
+  },
+  {
+    // The team owners joined the DTC 3 seed: copy them onto the original teams
+    // — matched by id AND name — unless an owner was already typed in.
+    id: 'dtc3-team-owners',
+    run: (state) => {
+      for (const src of TEAM_SEED) {
+        const t = state.teams.find((x) => x.id === src.id);
+        if (t && t.name === src.name && !t.owner) t.owner = src.owner;
+      }
     },
   },
 ];

@@ -416,6 +416,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       id: `t${Date.now()}`,
       name: str(b.name, 'Team name', { max: 60 }),
       captain: b.captain !== undefined ? str(b.captain, 'Captain', { max: 60, allowEmpty: true }) : '',
+      owner: b.owner !== undefined ? str(b.owner, 'Owner', { max: 60, allowEmpty: true }) : '',
       color: typeof b.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(b.color) ? b.color : '#64748b',
       code: generateCode(),
     };
@@ -429,6 +430,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     mutate(null, 'teams', () => {
       if (b.name !== undefined) team.name = str(b.name, 'Team name', { max: 60 });
       if (b.captain !== undefined) team.captain = str(b.captain, 'Captain', { max: 60, allowEmpty: true });
+      if (b.owner !== undefined) team.owner = str(b.owner, 'Owner', { max: 60, allowEmpty: true });
       if (b.color !== undefined && typeof b.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(b.color)) team.color = b.color;
     }, () => `Edited team ${team.name}`);
     res.json({ ok: true });

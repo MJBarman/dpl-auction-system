@@ -77,6 +77,7 @@ export interface Team {
   id: string;
   name: string;
   captain: string;
+  owner?: string; // shown with the team name on the projector
   color: string;
   code: string; // private join code for the captain
 }

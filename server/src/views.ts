@@ -40,7 +40,7 @@ export function publicState(state: State, undoLabel: string | null) {
     teams: state.teams.map((t) => {
       const s = summaries.find((x) => x.id === t.id)!;
       return {
-        id: t.id, name: t.name, captain: t.captain, color: t.color,
+        id: t.id, name: t.name, captain: t.captain, owner: t.owner ?? '', color: t.color,
         purse: state.settings.purse,
         spent: s.spent, remaining: s.remaining, count: s.count,
         reserve: s.reserve, maxBid: s.maxBid, full: s.full,
