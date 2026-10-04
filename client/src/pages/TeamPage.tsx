@@ -343,19 +343,22 @@ function HoldBidButton({ lotId, nextMinBid, canBid, reason, leading, busy, onBid
 
   return (
     <>
-      <button
-        className={`btn primary bid-big hold-bid${leading ? ' leading' : ''}${holding ? ' holding' : ''}`}
-        disabled={disabled || !armed}
-        onPointerDown={startHold}
-        onPointerUp={cancelHold}
-        onPointerLeave={cancelHold}
-        onPointerCancel={cancelHold}
-        onContextMenu={(e) => e.preventDefault()}
-        style={{ ['--hold-ms' as any]: `${HOLD_MS}ms` }}
-      >
-        <span className="hold-fill" aria-hidden />
-        <span className="hold-label">{label}</span>
-      </button>
+      {/* presentational: the dock keeps the button in thumb reach (sticky) */}
+      <div className="hold-dock">
+        <button
+          className={`btn primary bid-big hold-bid${leading ? ' leading' : ''}${holding ? ' holding' : ''}`}
+          disabled={disabled || !armed}
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
+          onPointerCancel={cancelHold}
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ ['--hold-ms' as any]: `${HOLD_MS}ms` }}
+        >
+          <span className="hold-fill" aria-hidden />
+          <span className="hold-label">{label}</span>
+        </button>
+      </div>
       {canBid && !leading && !busy && (
         <p className="muted small center-note hold-hint">
           Press and <b>hold</b> to bid — quick taps do nothing, so a slip can't place a bid.
@@ -422,6 +425,7 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
       {roster.length === 0 ? (
         <p className="muted">No players yet — your spends will appear here the moment the hammer falls.</p>
       ) : (
+        <div className="table-scroll">
         <table className="table">
           <thead><tr><th>Player</th><th>Role</th>{showTier && <th>Tier</th>}<th>Price</th><th>How</th></tr></thead>
           <tbody>
@@ -436,6 +440,7 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

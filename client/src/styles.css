@@ -229,7 +229,7 @@
   --ok-edge: var(--ad-run-mint);                 /* mint buttons need no edge on black */
   --dpl-disabled-ink: #5e5f60;                   /* legible but clearly inactive on black (3.2:1) */
   --modal-edge: var(--ad-divider);               /* a black dialog needs an edge against the black backdrop */
-  --hold-fill: color-mix(in srgb, var(--ad-run-mint) 55%, transparent);
+  --hold-fill: rgba(141, 254, 142, .55);       /* run mint at 55%: light mint over the white button, a green sweep under white ink on black */
   --ad-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M1 4.5l6 6 6-6' fill='none' stroke='%23fff' stroke-width='1.3'/%3E%3C/svg%3E");
   --ad-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M2 7.4l3.2 3.2L12 3.8' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3C/svg%3E");
 }
@@ -585,6 +585,10 @@ label.check input[type='checkbox']:focus-visible { outline: 1px dashed var(--ad-
 .actions .btn { min-height: 32px; padding: 0 8px; font-size: 14px; }
 .table td .dot { margin-right: 8px; vertical-align: 0; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+/* a table that scrolls sideways keeps every row on one line (48px rows); only
+   the pool's player cell wraps, for its badges and the private note */
+.table-scroll .table td { white-space: nowrap; }
+.table-scroll .pool-table td.clickable { white-space: normal; min-width: 150px; }
 
 /* bid history, "Bidding on this player", "Top sales": 48px rows that run edge
    to edge inside their card, so the leading row reads as one inverse block */
@@ -746,6 +750,7 @@ label.check input[type='checkbox']:focus-visible { outline: 1px dashed var(--ad-
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 80;
   display: grid; place-items: center;
+  grid-template-columns: minmax(0, 1fr);   /* the column is the viewport, never the content's width */
   padding: 16px;
   overflow-y: auto; overscroll-behavior: contain;
   background: var(--ad-backdrop);
@@ -872,6 +877,18 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
 .landing-cards > .card > p { margin: 0 0 24px; }
 .landing-cards > .card > :last-child { margin-top: auto; }
 .landing-foot { text-align: center; margin-top: 32px; }
+/* /join/CODE: a loader while signing in; a failure reads as an error notice */
+.landing > .card > h2:only-child { display: flex; align-items: center; gap: 16px; margin: 0; }
+.landing > .card > h2:only-child::before {
+  content: ''; flex: none; width: 24px; height: 24px;
+  border: 2px solid var(--ad-divider); border-top-color: var(--ad-text); border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+.landing > .card:has(> button) > p.muted {
+  margin: 0 0 24px; padding: 16px;
+  font: var(--ad-body-s); color: var(--ad-text);
+  background: var(--ad-error-surface); border-left: 4px solid var(--ad-red);
+}
 
 
 /* =============================================================================
@@ -1079,6 +1096,25 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
 .settings-stack { max-width: 760px; margin: 0 auto; }
 .settings-stack > .btn.big { margin: 8px 0 24px; }
 .rung-label { min-width: 96px; font-weight: 700; color: var(--ad-text); }
+/* settings rows: names get the room, numbers a steady width, buttons never wrap */
+.settings-stack .row > .input:not(.grow):not(.color) { flex: 1 1 96px; min-width: 72px; }
+.settings-stack .row > .input.grow { flex: 2 1 160px; min-width: 96px; }
+.settings-stack .row > .btn { flex: none; white-space: nowrap; }
+
+/* empty states: a quiet dashed tile instead of a bare line of text */
+.team-main > .card > p.muted:not(.small),
+.table-scroll:has(tbody:empty)::after {
+  display: block;
+  margin: 16px 0 0;
+  padding: 32px 16px;
+  text-align: center;
+  font: var(--ad-body-m);
+  color: var(--ad-text-2);
+  border: 1px dashed var(--ad-divider);
+}
+.table-scroll:has(tbody:empty)::after { content: 'No players match this filter.'; margin: 16px var(--card-pad) 0; }
+.card:has(.tab.active:nth-child(3)) .table-scroll:has(tbody:empty)::after { content: 'Your watchlist is empty. Tap the star next to a player to add them.'; }
+.table-scroll:has(tbody:empty) .table thead { display: none; }
 
 
 /* =============================================================================
@@ -1098,14 +1134,26 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
   background: var(--ad-page);
 }
 .money-cell.accent { box-shadow: inset 0 -4px 0 var(--team-color, var(--ad-text)); }
-.money-value { font: 400 clamp(20px, 3.6vw, 30px)/1.1 var(--ad-font-display); letter-spacing: 1px; white-space: nowrap; }
+.money-value { font: 400 clamp(18px, 5.6vw, 30px)/1.1 var(--ad-font-display); letter-spacing: 1px; white-space: nowrap; }
 .money-value .muted { color: var(--ad-text-2); }
-.money-label { margin-top: 4px; font: 400 11px/14px var(--ad-font-body); letter-spacing: 1px; text-transform: uppercase; color: var(--ad-text-2); }
+.money-label { margin-top: 4px; font: 400 10px/13px var(--ad-font-body); letter-spacing: .8px; text-transform: uppercase; color: var(--ad-text-2); text-wrap: balance; }
+@media (min-width: 641px) { .money-label { font-size: 11px; line-height: 14px; letter-spacing: 1px; } }
 
 .live-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 
-/* hold to bid: the product page's "Add to bag" — full width, 60px */
-.bid-big { width: 100%; min-height: var(--ad-size-buy); margin-top: 24px; padding: 8px 16px; font: 700 18px/24px var(--ad-font-body); }
+/* hold to bid: the product page's "Add to bag" — full width, 60px. The dock
+   keeps it in thumb reach: it sticks to the bottom of the screen while the lot
+   card is in view, on a solid page-colour strip so nothing shows through. */
+.hold-dock {
+  position: sticky; bottom: 0; z-index: 5;
+  margin: 24px calc(-1 * var(--card-pad)) 0;
+  padding: 12px var(--card-pad) calc(12px + env(safe-area-inset-bottom));
+  background: var(--ad-page);
+  border-top: 1px solid var(--ad-divider);
+}
+.bid-big { width: 100%; min-height: var(--ad-size-buy); padding: 8px 16px; font: 700 18px/24px var(--ad-font-body); }
+/* toasts float above the dock instead of covering the bid button */
+body:has(.hold-dock) .toast-stack { bottom: calc(96px + env(safe-area-inset-bottom)); }
 /* A deliberate press, not a tap: the mint fill sweeps across for the length of
    the hold and snaps back on an early release. */
 .hold-bid {
@@ -1156,6 +1204,9 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
   .card .tab:not(.active):hover { background-color: var(--ad-hover); border-color: var(--ad-text); }
 }
 .pool-table td .player-cell span { font-weight: 700; }
+/* the chips sit on one line that scrolls sideways instead of wrapping */
+.card .row:has(> .tab) { flex-wrap: nowrap; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.card .row:has(> .tab)::-webkit-scrollbar { display: none; }
 
 
 /* =============================================================================
@@ -1230,37 +1281,203 @@ details > summary:active { background-color: var(--ad-hover); }
 
 
 /* =============================================================================
-   16. Responsive
+   16. Icon toggles: theme and bid sound become 44px ghost icon buttons. The
+       words stay in the DOM (clipped, not removed), so screen readers and the
+       tooltip still say what a tap does; the icon shows the same thing.
    ========================================================================== */
-/* two-row topbar below 1024px: brand + utilities, then a scrolling tab row */
-@media (max-width: 1023px) {
+:root {
+  --i-sun: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.5'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.28 5.28l2.12 2.12M16.6 16.6l2.12 2.12M5.28 18.72l2.12-2.12M16.6 7.4l2.12-2.12'/%3E%3C/svg%3E");
+  --i-moon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.5'%3E%3Cpath d='M19.5 15.2A8 8 0 1 1 8.8 4.5a6.6 6.6 0 0 0 10.7 10.7z'/%3E%3C/svg%3E");
+  --i-bell: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.5'%3E%3Cpath d='M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z'/%3E%3Cpath d='M9.5 20.75h5'/%3E%3C/svg%3E");
+  --i-bell-off: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.5'%3E%3Cpath d='M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z'/%3E%3Cpath d='M9.5 20.75h5M3.5 3.5l17 17'/%3E%3C/svg%3E");
+}
+.btn.theme-toggle, .btn.sound-toggle {
+  width: 44px; min-height: 44px; padding: 0;
+  justify-content: flex-start;
+  overflow: hidden; white-space: nowrap; text-indent: 64px;
+  transform-style: flat;
+}
+.btn.theme-toggle::before, .btn.sound-toggle::before {
+  content: '';
+  position: absolute; inset: 0; margin: auto;
+  width: 22px; height: 22px;
+  background-color: currentColor;
+  -webkit-mask: var(--i-sun) center / 22px no-repeat;
+  mask: var(--i-sun) center / 22px no-repeat;
+}
+.btn.theme-toggle[aria-pressed='true']::before { -webkit-mask-image: var(--i-moon); mask-image: var(--i-moon); }
+.btn.sound-toggle::before { -webkit-mask-image: var(--i-bell); mask-image: var(--i-bell); }
+.btn.sound-toggle.muted::before { -webkit-mask-image: var(--i-bell-off); mask-image: var(--i-bell-off); }
+.topbar .btn { white-space: nowrap; }
+.topbar-right > .btn.ghost:not(.theme-toggle):not(.sound-toggle) { min-height: 44px; padding: 0 12px; }
+
+
+/* =============================================================================
+   17. Responsive layout
+   ========================================================================== */
+/* Below 1200px the topbar is two rows: brand + utilities in 56px, then the
+   tabs on a 48px row of their own that scrolls sideways. It scrolls away with
+   the page, and the captain's money bar sticks at the top instead. */
+@media (max-width: 1199px) {
   .topbar { position: static; flex-wrap: wrap; height: auto; gap: 0 8px; padding: 0; }
   .topbar-left { flex: 1 1 0; min-height: 56px; padding-left: max(var(--gutter), env(safe-area-inset-left)); }
-  .topbar-right { min-height: 56px; padding-right: max(8px, env(safe-area-inset-right)); }
+  .topbar-right { min-height: 56px; gap: 4px; padding-right: max(4px, calc(var(--gutter) - 12px), env(safe-area-inset-right)); }
   .topbar nav.tabs {
     order: 3; flex: 1 0 100%;
     height: 48px;
-    padding: 0 max(calc(var(--gutter) - 16px), env(safe-area-inset-left));
+    padding: 0 max(calc(var(--gutter) - 16px), env(safe-area-inset-right)) 0 max(calc(var(--gutter) - 16px), env(safe-area-inset-left));
     border-top: 1px solid var(--ad-divider);
+    scroll-padding-inline: var(--gutter);
   }
-  .money-bar { top: 0; }
+  .topbar nav.tabs .tab { flex: 1 0 auto; justify-content: center; font-size: 14px; }
+  .brand { font-size: 20px; letter-spacing: 1.5px; }
+  .money-bar { top: env(safe-area-inset-top, 0px); }
 }
+/* the bar covers the status-bar strip when the page runs full screen */
+.money-bar::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: env(safe-area-inset-top, 0px); background: var(--ad-page); }
+
 @media (max-width: 900px) {
-  .console-grid, .live-grid { grid-template-columns: minmax(0, 1fr); }
+  .live-grid { grid-template-columns: minmax(0, 1fr); }
   .player-photo.xl { width: 150px; height: 150px; font-size: 52px; }
   .player-photo.md { width: 72px; height: 72px; font-size: 26px; }
+
+  /* Auction console on a phone or tablet: the two columns dissolve into one
+     ordered flow, and the lot card opens up so the bid panel sits straight
+     under the lot header: bid buttons, SOLD and UNSOLD come before the stats
+     grid, without any markup change. Desktop keeps both columns. */
+  .console-grid { display: flex; flex-direction: column; align-items: stretch; gap: 16px; }
+  .console-left, .console-right { display: contents; }
+  .console-grid .card { margin: 0; }
+  .console-left > * { order: 1; }
+  .console-right > * { order: 4; }
+  .console-right > .bid-panel { order: 2; }
+  .console-left > .lot-card { display: contents; }
+  .console-left > .lot-card > .lot-head {
+    order: 1;
+    padding: var(--card-pad);
+    background: var(--ad-surface);
+    border: 1px solid var(--ad-divider);
+  }
+  .console-left > .lot-card > :not(.lot-head) { order: 3; margin: 0; }
+  .console-left > .lot-card > .bid-history { border-top: 0; }
+  .console-left > .lot-card > .bid-history .bid-row { margin: 0; padding: 0 12px; }
+  .stagebar { margin-inline: calc(-1 * var(--gutter)); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); }
+
+  /* frozen first column for scrolling tables; the hairline marks the edge */
+  .table-scroll .table :is(th, td):first-child {
+    position: sticky; left: 0; z-index: 1;
+    background-color: var(--ad-surface);
+    box-shadow: inset -1px 0 0 var(--ad-divider);
+  }
+  .table-scroll .table .row-you td:first-child { background-color: var(--ad-surface-alt); }
+  /* the pool table freezes the star and the player together */
+  .pool-table :is(th, td):first-child { width: 48px; min-width: 48px; padding: 0 0 0 4px !important; box-shadow: none !important; }
+  .pool-table :is(th, td):nth-child(2) {
+    position: sticky; left: 48px; z-index: 1;
+    background-color: var(--ad-surface);
+    box-shadow: inset -1px 0 0 var(--ad-divider);
+  }
+  .pool-table .row-you td:nth-child(2) { background-color: var(--ad-surface-alt); }
 }
+
+/* The live lot on a phone: photo, tags and name first; then a full-width bid
+   row (the amount big on the left, the hammer timer on the right), then the
+   stats and the notes. */
+@media (max-width: 640px) {
+  .lot-head { flex-direction: column; align-items: stretch; gap: 16px; }
+  .lot-card .lot-name { margin-top: 8px; }
+  .lot-bid-box {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 16px;
+    min-width: 0;
+    padding-top: 16px;
+    text-align: left;
+    border-top: 1px solid var(--ad-divider);
+  }
+  .lot-bid-box > .lot-bid-amount { grid-column: 1; grid-row: 1; font-size: clamp(36px, 11vw, 48px); }
+  .lot-bid-box > .lot-bid-team { grid-column: 1; grid-row: 2; justify-self: start; }
+  .lot-bid-box > .hammer-timer { grid-column: 2; grid-row: 1 / span 2; margin: 0; font-size: 40px; }
+
+  /* pool: the filter chips sit on one line that scrolls edge to edge */
+  .card .row:has(> .tab) {
+    flex: 1 0 100%;
+    margin: 4px calc(-1 * var(--card-pad)) 0;
+    padding: 0 var(--card-pad);
+    scroll-padding-inline: var(--card-pad);
+  }
+
+  /* modals become bottom sheets: full width, anchored low, scrolling inside */
+  .modal-backdrop { place-items: end stretch; padding: 0; }
+  .modal {
+    width: 100%;
+    max-height: 90vh; max-height: 90dvh;
+    padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+    border: 0; border-top: 1px solid var(--modal-edge);
+    animation: sheetUp var(--ad-dur) var(--ad-ease);
+  }
+  .modal-head { margin: 0 -16px 16px; padding: 8px 4px 8px 16px; }
+  .modal .row.end > .btn { flex: 1; }
+
+  /* console bid panel: amount and the Bid button share a line under the team */
+  .bid-panel .row:has(> select) { grid-template-columns: minmax(0, 1fr) auto; }
+  .bid-panel .row:has(> select) > select { grid-column: 1 / -1; }
+  .btn.bid-btn { min-height: 72px; }
+  .hammer-row .btn { min-height: 60px; }
+
+  /* players toolbar: search on its own line, then the filters, then the actions */
+  .admin-main > .card > .row.wrap:first-child > .input.grow { flex: 1 1 100%; }
+  .admin-main > .card > .row.wrap:first-child > select.input { flex: 1 1 calc(50% - 4px); }
+  .admin-main > .card > .row.wrap:first-child > .btn { flex: 1 1 calc(50% - 4px); }
+  .admin-main > .card > .row.wrap:first-child > .btn.primary { flex-basis: 100%; margin-bottom: 4px; }
+
+  .landing { padding-top: 32px; }
+  .landing-hero { margin: 24px 0 32px; }
+}
+@keyframes sheetUp { from { transform: translateY(100%); } }
+
 @media (max-width: 520px) {
   :root { --card-pad: 16px; }
-  .table th, .table td { padding-left: 6px; padding-right: 6px; }
   .hide-narrow { display: none; }
   .stat-group { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .stat-value { font-size: 17px; line-height: 22px; }
+  /* a season's MVP rank moves to the cell's corner so five columns still fit */
+  .stats-grid:has(.stat-rank) .stat-cell { padding-top: 14px; }
+  .stat-rank { position: absolute; top: 0; right: 0; margin: 0; padding: 0 3px; font-size: 9px; line-height: 12px; vertical-align: 0; }
+  .stat-label { font-size: 10px; letter-spacing: .6px; }
+  .landing-title-row .theme-toggle { top: 8px; }
+  /* the console brand shrinks to its bat mark (still the home link) so the
+     stage, sound, connection and sign-out controls keep their room */
+  .admin-page .brand { flex: none; width: 1.3em; text-overflow: clip; letter-spacing: 0; }
+}
+/* very narrow phones: the captain's sub-line steps aside */
+@media (max-width: 360px) {
+  :root { --gutter: 12px; }
+  .topbar .muted.small { display: none; }
+  .brand { font-size: 18px; letter-spacing: 1px; }
+  .stat-label { font-size: 9px; letter-spacing: .3px; }
+}
+
+/* touch screens: 44px targets for the small controls */
+@media (pointer: coarse) {
+  .card .tab { min-height: 44px; }
+  .actions .btn, .bid-panel > .row:last-child .btn { min-height: 44px; }
+}
+
+/* landscape phones: a tighter frame so the lot still has room between the
+   sticky money bar and the sticky bid button */
+@media (max-height: 500px) and (orientation: landscape) {
+  .topbar-left, .topbar-right { min-height: 48px; }
+  .topbar nav.tabs { height: 44px; }
+  .money-cell { padding: 6px 4px 8px; }
+  .money-label { margin-top: 2px; }
+  .hold-dock { padding-top: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .bid-big { min-height: 52px; }
+  .card.center-note { padding: 24px var(--card-pad); }
+  .admin-main, .team-main { padding-top: 16px; }
 }
 
 
 /* =============================================================================
-   17. Reduced motion: no decorative movement; the hold-to-bid fill keeps its
+   18. Reduced motion: no decorative movement; the hold-to-bid fill keeps its
        linear sweep because it is the only feedback on how long to hold.
        (The projector has its own block in screen.css.)
    ========================================================================== */
