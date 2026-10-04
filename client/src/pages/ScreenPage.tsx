@@ -4,7 +4,7 @@ import { useApp } from '../store';
 import { LotView, PlayerView, StateView, TeamView, Tier } from '../types';
 import {
   auctionRules, flatReserve, fmt, formatClock, freshMaxBid, lastTeamBuying, OfflineBanner, overallRank, PlayerPhoto,
-  SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown,
+  SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown, useSoldSound,
 } from '../ui';
 import { useTheme } from '../theme';
 import '../screen.css';
@@ -93,6 +93,7 @@ export default function ScreenPage() {
   // Chime on each new bid; the projector keeps its own mute preference,
   // independent of the auctioneer's console.
   const { muted, toggleMuted } = useBidSound(state?.lot ?? null, SCREEN_BID_MUTE_KEY);
+  useSoldSound(state, muted); // the gavel lands with the SOLD takeover
   const { theme, toggle: toggleTheme } = useTheme();
   useWakeLock();
   const [flash, setFlash] = useState<FlashInfo | null>(null);
@@ -222,8 +223,8 @@ export default function ScreenPage() {
             className={`scr-sound${muted ? ' muted' : ''}`}
             onClick={toggleMuted}
             aria-pressed={!muted}
-            aria-label={muted ? 'Bid sound is off — click to turn it on' : 'Bid sound is on — click to mute'}
-            title={muted ? 'Bid sound off' : 'Bid sound on'}
+            aria-label={muted ? 'Sounds are off — click to turn on the bid and SOLD sounds' : 'Sounds are on — click to mute the bid and SOLD sounds'}
+            title={muted ? 'Sounds off' : 'Sounds on'}
           >
             {muted ? '🔇' : '🔔'}
           </button>

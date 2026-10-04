@@ -6,8 +6,9 @@ import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
 import { PlayerView, StateView, TeamView, WatchlistEntry } from '../types';
 import {
-  auctionRules, ConnectionDot, fmt, formatClock, lastTeamBuying, maxBidLine, Modal, OfflineBanner, PlayerBadges,
-  PlayerPhoto, StatsGrid, ThemeToggle, TierBadge, TIMEOUT_COUNTDOWN_MS, useAction, useCountdown,
+  auctionRules, BidSoundToggle, ConnectionDot, fmt, formatClock, lastTeamBuying, maxBidLine, Modal, OfflineBanner,
+  PlayerBadges, PlayerPhoto, StatsGrid, TEAM_BID_MUTE_KEY, ThemeToggle, TierBadge, TIMEOUT_COUNTDOWN_MS, useAction,
+  useBidSound, useCountdown, useSoldSound,
 } from '../ui';
 
 export default function TeamPage() {
@@ -23,6 +24,11 @@ export default function TeamPage() {
   useEffect(() => {
     if (state && state.you.role !== 'team') refresh();
   }, [state?.you.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The bid chime and the SOLD gavel on the captain's phone too, with this
+  // device's own mute. Called before the early returns so hook order stays stable.
+  const { muted, toggleMuted } = useBidSound(state?.lot ?? null, TEAM_BID_MUTE_KEY);
+  useSoldSound(state, muted);
 
   if (!session || session.role !== 'team') return null;
   if (!state) return <div className="page-loading">Connecting…</div>;
@@ -60,6 +66,7 @@ export default function TeamPage() {
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
+          <BidSoundToggle muted={muted} onToggle={toggleMuted} />
           <ConnectionDot connected={connected} />
           <button className="btn ghost" onClick={() => { clearSession(); refresh(); navigate('/'); }}>Exit</button>
         </div>

@@ -1458,12 +1458,19 @@ details > summary:active { background-color: var(--ad-hover); }
   .stat-label { font-size: 10px; letter-spacing: .6px; }
   .landing-title-row .theme-toggle { top: 8px; }
   .admin-page .brand { flex: none; }
+  /* phone topbar: theme, sound, LIVE and Exit share the row with the team
+     name, so the controls tighten to 40px and the name scales with the screen */
+  .topbar-right { gap: 2px; }
+  .topbar-right .btn.theme-toggle, .topbar-right .btn.sound-toggle { width: 40px; min-height: 40px; }
+  .topbar-right .conn-dot { gap: 6px; padding: 4px 6px; letter-spacing: 1px; }
+  .topbar-right > .btn.ghost:not(.theme-toggle):not(.sound-toggle) { padding: 0 10px; }
+  .team-page .brand { font-size: clamp(17px, 4.7vw, 20px); letter-spacing: 1px; }
 }
 /* very narrow phones: the captain's sub-line steps aside */
 @media (max-width: 360px) {
   :root { --gutter: 12px; }
   .topbar .muted.small { display: none; }
-  .brand { font-size: 18px; letter-spacing: 1px; }
+  .brand { font-size: 17px; letter-spacing: 1px; }
   .stat-label { font-size: 9px; letter-spacing: .3px; }
 }
 

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { LotView, PlayerStats, PlayerView, StateView, TeamView, Tier } from './types';
 import { Icon } from './icons';
-import { playBidSound, unlockAudio } from './sound';
+import { playBidSound, playSoldSound, unlockAudio } from './sound';
 import { useTheme } from './theme';
 
 export const fmt = (n: number | null | undefined): string =>
@@ -292,12 +292,14 @@ export function formatClock(totalSecs: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ---- bid sound --------------------------------------------------------------
+// ---- auction sounds ---------------------------------------------------------
 
 // Default (auctioneer console) mute key. Each screen passes its own key so the
-// console and the projector keep independent, per-device mute preferences.
+// console, the projector and every captain's phone keep independent,
+// per-device mute preferences. One toggle covers the bid chime and SOLD.
 export const CONSOLE_BID_MUTE_KEY = 'dpl.bidSound.muted';
 export const SCREEN_BID_MUTE_KEY = 'dpl.bidSound.muted.screen';
+export const TEAM_BID_MUTE_KEY = 'dpl.bidSound.muted.team';
 
 function loadMuted(key: string): boolean {
   try {
@@ -332,12 +334,14 @@ export function useBidSound(
     // context up front so the very first bid can sound. Otherwise the listeners
     // below unlock on the first interaction on this screen.
     unlockAudio();
+    // On a phone a touch only counts as a user gesture when the finger
+    // lifts (pointerup / touchend / click), so listen for those as well as
+    // the mouse-down and key presses that unlock desktop browsers.
     const unlock = () => unlockAudio();
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    const events = ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const;
+    for (const e of events) window.addEventListener(e, unlock, { passive: true });
     return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
+      for (const e of events) window.removeEventListener(e, unlock);
     };
   }, []);
 
@@ -366,7 +370,33 @@ export function useBidSound(
   return { muted, toggleMuted };
 }
 
-/** Toggle for the bid chime. Reads as a live on/off state, not a fire button. */
+/**
+ * Plays the SOLD gavel once per sale, on whichever screen calls it (console,
+ * projector, captains' phones), unless that screen is muted. A sale is a player
+ * going to "sold" in the main or accelerated round — the same rule as the
+ * projector's SOLD takeover — so manual assignments, auto-allotment, undo and
+ * the first snapshot after a (re)load stay silent.
+ */
+export function useSoldSound(state: StateView | null, muted: boolean): void {
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
+  const before = useRef<Map<string, string> | null>(null);
+  useEffect(() => {
+    if (!state) return;
+    const prev = before.current;
+    before.current = new Map(state.players.map((p) => [p.id, p.status]));
+    if (!prev) return; // first snapshot: never ring for sales that already happened
+    const sale = state.players.some((p) =>
+      p.status === 'sold'
+      && (p.round === 'main' || p.round === 'accelerated')
+      && prev.has(p.id)
+      && prev.get(p.id) !== 'sold');
+    if (sale && !mutedRef.current) playSoldSound();
+  }, [state]);
+}
+
+/** Toggle for the auction sounds (bid chime and SOLD). Reads as a live on/off
+ *  state, not a fire button. */
 export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: () => void }) {
   return (
     <button
@@ -374,9 +404,9 @@ export function BidSoundToggle({ muted, onToggle }: { muted: boolean; onToggle: 
       className={`btn ghost sound-toggle${muted ? ' muted' : ''}`}
       onClick={onToggle}
       aria-pressed={!muted}
-      title={muted ? 'Bid sound is off — click to turn it on' : 'Bid sound is on — click to mute'}
+      title={muted ? 'Sounds are off — click to turn on the bid and SOLD sounds' : 'Sounds are on — click to mute the bid and SOLD sounds'}
     >
-      {muted ? 'Bid sound off' : 'Bid sound on'}
+      {muted ? 'Sounds off' : 'Sounds on'}
     </button>
   );
 }

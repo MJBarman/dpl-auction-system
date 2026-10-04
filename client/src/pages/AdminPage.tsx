@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../icons';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
-import { BidSoundToggle, ConnectionDot, OfflineBanner, ThemeToggle, useBidSound } from '../ui';
+import { BidSoundToggle, ConnectionDot, OfflineBanner, ThemeToggle, useBidSound, useSoldSound } from '../ui';
 import AuctionConsole from '../admin/AuctionConsole';
 import LogTab from '../admin/LogTab';
 import PlayersTab from '../admin/PlayersTab';
@@ -38,6 +38,7 @@ export default function AdminPage() {
   // Chime on every new bid; the toggle lets the auctioneer mute it mid-event.
   // Called before the early returns below so hook order stays stable.
   const { muted, toggleMuted } = useBidSound(state?.lot ?? null);
+  useSoldSound(state, muted); // the gavel on every sale; the same toggle mutes it
 
   if (!session || session.role !== 'admin') return null;
   if (!state) return <div className="page-loading">Connecting…</div>;
