@@ -1,19 +1,34 @@
 import { io, Socket } from 'socket.io-client';
 import { create } from 'zustand';
-import { StateView } from './types';
+import { Presence, StateView } from './types';
 import { api } from './api';
+import { noteServerTime } from './clock';
 import { loadSession } from './session';
+
+/** Emoji reactions arrive in small batches: emoji → how many. They are
+ *  moments, not state, so screens subscribe instead of reading the store. */
+type ReactionListener = (batch: Record<string, number>) => void;
+const reactionListeners = new Set<ReactionListener>();
+export function onReactions(fn: ReactionListener): () => void {
+  reactionListeners.add(fn);
+  return () => {
+    reactionListeners.delete(fn);
+  };
+}
 
 interface AppStore {
   state: StateView | null;
+  presence: Presence | null;
   connected: boolean;
   socket: Socket | null;
   connect: () => void;
   refresh: () => void;
+  react: (emoji: string) => void;
 }
 
 export const useApp = create<AppStore>((set, get) => ({
   state: null,
+  presence: null,
   connected: false,
   socket: null,
 
@@ -25,7 +40,9 @@ export const useApp = create<AppStore>((set, get) => ({
     // still apply — a role refresh re-sends the same version with new `you`.
     const apply = (next: StateView) => {
       const cur = get().state;
-      if (!cur || next.version >= cur.version) set({ state: next });
+      if (cur && next.version < cur.version) return;
+      noteServerTime(next.serverTime); // measured now, as it arrives (see clock.ts)
+      set({ state: next });
     };
 
     const socket = io({
@@ -38,6 +55,13 @@ export const useApp = create<AppStore>((set, get) => ({
     socket.on('connect', () => set({ connected: true }));
     socket.on('disconnect', () => set({ connected: false }));
     socket.on('state', apply);
+    socket.on('presence', (p: Presence) => {
+      if (p && typeof p.watching === 'number') set({ presence: { watching: p.watching, guesses: Number(p.guesses) || 0 } });
+    });
+    socket.on('reactions', (batch: Record<string, number>) => {
+      if (!batch || typeof batch !== 'object') return;
+      for (const fn of reactionListeners) fn(batch);
+    });
     set({ socket });
 
     // REST fallback: phones suspend background tabs and kill sockets silently.
@@ -60,6 +84,11 @@ export const useApp = create<AppStore>((set, get) => ({
     window.addEventListener('focus', wake);
     window.addEventListener('online', wake);
     window.setInterval(fetchNow, 15_000);
+  },
+
+  /** Send an emoji reaction to every screen (the server limits how often). */
+  react: (emoji: string) => {
+    get().socket?.emit('react', emoji);
   },
 
   /** Re-request state with the current token (after login/logout). */

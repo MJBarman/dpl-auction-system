@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { Icon } from '../icons';
@@ -39,11 +39,17 @@ export default function Landing() {
     }
   };
 
+  // Opened from the home-screen icon: go straight to where this phone belongs.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('home')) return;
+    navigate(session?.role === 'team' ? '/team' : session?.role === 'admin' ? '/admin' : '/watch', { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="landing">
       <header className="landing-hero">
         <div className="landing-title-row">
-          <h1>{state?.settings.auctionName ?? 'DTC Season 3 Player Auction'}</h1>
+          <h1>{state?.settings.auctionName ?? 'DCT Player Auction'}</h1>
           <ConnectionDot connected={connected} />
           <ThemeToggle />
         </div>
@@ -87,9 +93,15 @@ export default function Landing() {
         </section>
 
         <section className="card">
+          <h2><Icon name="phone" /> Watch live</h2>
+          <p className="muted small">Follow every bid on your phone: back a team, guess the prices, react and share.</p>
+          <Link className="btn primary big" to="/watch">Watch on this phone</Link>
+        </section>
+
+        <section className="card">
           <h2><Icon name="monitor" /> Auction Screen</h2>
           <p className="muted small">Full-screen live display for the projector or TV in the room.</p>
-          <Link className="btn big" to="/screen">Open the big screen</Link>
+          <Link className="btn big" to="/screen?big=1">Open the big screen</Link>
         </section>
 
         <section className="card">

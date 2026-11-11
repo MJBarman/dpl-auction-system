@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../icons';
+import { api, signOutOnServer } from '../api';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
-import { BidSoundToggle, ConnectionDot, OfflineBanner, ThemeToggle, useBidSound, useSoldSound } from '../ui';
+import { BidSoundToggle, ConnectionDot, OfflineBanner, ThemeToggle, useBidSound, useSoldSound, useToast } from '../ui';
 import AuctionConsole from '../admin/AuctionConsole';
 import LogTab from '../admin/LogTab';
+import PhotoReview from '../admin/PhotoReview';
 import PlayersTab from '../admin/PlayersTab';
 import SettingsTab from '../admin/SettingsTab';
 import TeamsTab from '../admin/TeamsTab';
@@ -31,8 +33,24 @@ export default function AdminPage() {
   }, [session, navigate]);
 
   // The socket may have connected before login — make sure we get admin state.
+  // And if the server no longer knows this console (signed out elsewhere, the
+  // PIN changed, or two weeks unused), go back to sign-in and say why, rather
+  // than leave a console whose every button answers "Admin access required".
+  const toast = useToast();
   useEffect(() => {
-    if (state && state.you.role !== 'admin') refresh();
+    if (!state || state.you.role === 'admin') return;
+    refresh();
+    let alive = true;
+    api.get<{ role: string }>('/api/auth/me').then((me) => {
+      if (!alive || me.role === 'admin' || loadSession()?.role !== 'admin') return;
+      clearSession();
+      refresh();
+      toast('This console was signed out — sign in again with the admin PIN');
+      navigate('/', { replace: true });
+    }).catch(() => { /* offline: the next state brings us back here */ });
+    return () => {
+      alive = false;
+    };
   }, [state?.you.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chime on every new bid; the toggle lets the auctioneer mute it mid-event.
@@ -43,7 +61,8 @@ export default function AdminPage() {
   if (!session || session.role !== 'admin') return null;
   if (!state) return <div className="page-loading">Connecting…</div>;
 
-  const signOut = () => {
+  const signOut = async () => {
+    await signOutOnServer(); // the token stops working everywhere, not just here
     clearSession();
     refresh();
     navigate('/');
@@ -87,6 +106,7 @@ export default function AdminPage() {
         {tab === 'settings' && <SettingsTab state={state} />}
         {tab === 'log' && <LogTab />}
       </main>
+      <PhotoReview state={state} />
     </div>
   );
 }

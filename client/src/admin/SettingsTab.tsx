@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, downloadUrl } from '../api';
+import { api, downloadFile } from '../api';
 import { Icon } from '../icons';
 import { FactoryResetPreview, IncrementRung, Stage, StateView, Tier } from '../types';
 import { maxFirstBid, Modal, useAction, useToast } from '../ui';
@@ -26,6 +26,7 @@ export default function SettingsTab({ state }: { state: StateView }) {
     s.tiers.map((t) => ({ key: t.key, name: t.name, basePrice: String(t.basePrice), color: t.color })),
   );
   const [pin, setPin] = useState('');
+  const [currentPin, setCurrentPin] = useState('');
   const [danger, setDanger] = useState<'auction' | 'factory' | null>(null);
   const [backup, setBackup] = useState<{ name: string; file: BackupFile } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -160,21 +161,52 @@ export default function SettingsTab({ state }: { state: StateView }) {
       <button className="btn primary big" onClick={save}>Save settings</button>
 
       <div className="card">
+        <h3>Phones watching</h3>
+        <p className="muted small">
+          Anyone can follow the auction on their phone at <b>{window.location.host}/watch</b> (the projector shows a QR
+          code for it before the start and in the breaks). These switches work at once, mid-auction too.
+        </p>
+        {AUDIENCE_SWITCHES.map((sw) => (
+          <label key={sw.key} className="check audience-switch">
+            <input
+              type="checkbox"
+              checked={state.settings[sw.key] !== false}
+              onChange={(e) => {
+                const on = e.target.checked; // read now: React puts the box back until the server answers
+                run(() => api.put('/api/admin/settings', { [sw.key]: on }), `${sw.label}: ${on ? 'on' : 'off'}`);
+              }}
+            />
+            <span>{sw.label}<small>{sw.note}</small></span>
+          </label>
+        ))}
+      </div>
+
+      <div className="card">
         <h3>Security</h3>
-        <div className="row">
-          <input className="input" type="password" placeholder="New admin PIN (min 4 chars)" value={pin} onChange={(e) => setPin(e.target.value)} />
-          <button className="btn" disabled={pin.trim().length < 4}
-            onClick={() => run(async () => { await api.put('/api/admin/pin', { pin: pin.trim() }); setPin(''); }, 'PIN changed')}>
+        <div className="row wrap">
+          <input className="input" type="password" autoComplete="current-password" placeholder="Current PIN" value={currentPin} onChange={(e) => setCurrentPin(e.target.value)} />
+          <input className="input" type="password" autoComplete="new-password" placeholder="New admin PIN (min 4 chars)" value={pin} onChange={(e) => setPin(e.target.value)} />
+          <button className="btn" disabled={pin.trim().length < 4 || !currentPin.trim()}
+            onClick={() => run(async () => {
+              const r = await api.put<{ signedOut: number }>('/api/admin/pin', { pin: pin.trim(), currentPin: currentPin.trim() });
+              setPin('');
+              setCurrentPin('');
+              if (r.signedOut) toast(`PIN changed — ${r.signedOut} other console${r.signedOut === 1 ? '' : 's'} signed out`, 'ok');
+            }, 'PIN changed')}>
             Change PIN
           </button>
         </div>
+        <p className="muted small">
+          Changing the PIN signs out every other console. If the server sets the PIN itself (the ADMIN_PIN setting on the
+          host), that one comes back after a restart.
+        </p>
       </div>
 
       <div className="card">
         <h3>Data</h3>
         <div className="row wrap">
-          <a className="btn" href={downloadUrl('/api/admin/export.csv')} download><Icon name="download" /> Export results (CSV)</a>
-          <a className="btn" href={downloadUrl('/api/admin/backup.json')} download><Icon name="download" /> Download backup (JSON)</a>
+          <button className="btn" onClick={() => run(() => downloadFile('/api/admin/export.csv', 'dpl-auction-results.csv'))}><Icon name="download" /> Export results (CSV)</button>
+          <button className="btn" onClick={() => run(() => downloadFile('/api/admin/backup.json', 'dpl-auction-backup.json'))}><Icon name="download" /> Download backup (JSON)</button>
           <button className="btn" onClick={() => fileRef.current?.click()}><Icon name="upload" /> Restore backup…</button>
           <input ref={fileRef} type="file" accept="application/json" style={{ display: 'none' }}
             onChange={(e) => e.target.files?.[0] && restore(e.target.files[0])} />
@@ -200,6 +232,12 @@ export default function SettingsTab({ state }: { state: StateView }) {
     </div>
   );
 }
+
+const AUDIENCE_SWITCHES: { key: 'audienceGame' | 'audienceReactions' | 'audienceNames'; label: string; note: string }[] = [
+  { key: 'audienceGame', label: 'Guess the hammer price', note: 'Phones guess each player\u2019s price in the first 30 seconds; the closest three score points.' },
+  { key: 'audienceReactions', label: 'Emoji reactions on the screens', note: 'Taps on the phones float up the projector. Limited to a few a second in total.' },
+  { key: 'audienceNames', label: 'Show guessers\u2019 names', note: 'Off: results show the amounts only, never a name typed on a phone.' },
+];
 
 type BackupState = {
   stage: Stage;
@@ -264,7 +302,7 @@ function DangerPinModal({ title, intro, heading = 'What you lose', lines, loadEr
         </div>
       )}
       <p className="muted small">Download a backup first: Restore backup can bring everything back.</p>
-      <a className="btn" href={downloadUrl('/api/admin/backup.json')} download><Icon name="download" /> Download backup (JSON)</a>
+      <button className="btn" onClick={() => run(() => downloadFile('/api/admin/backup.json', 'dpl-auction-backup.json'))}><Icon name="download" /> Download backup (JSON)</button>
       <form className="stack" style={{ marginTop: 16 }} onSubmit={(e) => { e.preventDefault(); if (pin.trim() && ready) confirm(); }}>
         <label>
           Type the admin PIN to confirm
@@ -304,7 +342,7 @@ function AuctionResetModal({ state, onClose }: { state: StateView; onClose: () =
   );
 }
 
-/** Factory reset: everything back to the original DTC Season 3 seed. */
+/** Factory reset: everything back to the original DCT seed. */
 function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () => void }) {
   const [preview, setPreview] = useState<FactoryResetPreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -328,7 +366,7 @@ function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () =
     if (p.photosUnlinked.length > 0) {
       lines.push(`These photos stop showing: ${p.photosUnlinked.join(', ')}. They were uploaded after the original setup; the files stay in storage, but the app no longer links them.`);
     }
-    lines.push(`Both teams get new codes and QR join links; the old ones stop working.${p.teamDevices > 0 ? ` The ${p.teamDevices} phone${p.teamDevices === 1 ? '' : 's'} already signed in stay signed in.` : ''}`);
+    lines.push(`Both teams get new codes and QR join links; the old ones stop working.${p.teamDevices > 0 ? ` The ${p.teamDevices} captain phone${p.teamDevices === 1 ? '' : 's'} signed in now ${p.teamDevices === 1 ? 'is' : 'are'} signed out.` : ''}`);
     for (const t of p.teamsChanged) lines.push(`Team: ${t}.`);
     if (p.playersAdded.length > 0) lines.push(`Players you added are deleted: ${p.playersAdded.join(', ')}.`);
     if (p.playersRemoved.length > 0) lines.push(`Players you removed come back: ${p.playersRemoved.join(', ')}.`);
@@ -340,7 +378,7 @@ function FactoryResetModal({ state, onClose }: { state: StateView; onClose: () =
 
   return (
     <DangerPinModal title="Factory reset" onClose={onClose}
-      intro="This puts the whole app back to the original DTC Season 3 setup. It can’t be undone, and Undo doesn’t cover it."
+      intro="This puts the whole app back to the original DCT setup. It can’t be undone, and Undo doesn’t cover it."
       lines={lines} loadError={loadError}
       kept="Kept: the admin PIN, the event log and the photo files in storage."
       action="Factory reset" okMessage="Factory reset done"
@@ -370,8 +408,8 @@ function RestoreModal({ state, name, backup, onClose }: { state: StateView; name
   const teamCodes = state.admin?.teamCodes ?? [];
   const newCodes = b.teams.filter((t) => teamCodes.find((c) => c.teamId === t.id)?.code !== t.code).map((t) => t.name);
   if (newCodes.length > 0) lines.push(`Team codes and QR join links change for ${newCodes.join(', ')}: the current ones stop working.`);
-  const photoCodes = state.admin?.photoCodes ?? [];
-  const newLinks = b.players.filter((p) => photoCodes.find((c) => c.playerId === p.id)?.code !== p.photoCode).length;
+  const photoLinks = state.admin?.photoLinks ?? [];
+  const newLinks = b.players.filter((p) => photoLinks.find((c) => c.playerId === p.id)?.code !== p.photoCode).length;
   if (newLinks > 0) lines.push(`${newLinks} photo-upload link${newLinks === 1 ? '' : 's'} change: links sent since this backup stop working.`);
   const { rulesOnScreen: _nowRules, ...nowSettings } = state.settings;
   const { rulesOnScreen: _thenRules, ...thenSettings } = b.settings;

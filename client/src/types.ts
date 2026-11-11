@@ -28,6 +28,9 @@ export interface Settings {
   timeoutEvery: number; // strategic timeout after every N main-round players (0 = off)
   showTier: boolean; // show tier names/chips on screens (off hides them everywhere)
   rulesOnScreen: boolean; // projector shows the rules board between lots
+  audienceGame: boolean;      // phones watching can guess each hammer price
+  audienceReactions: boolean; // emoji reactions from phones float on the screens
+  audienceNames: boolean;     // show guessers' names (off: amounts only)
   tiers: Tier[];
 }
 
@@ -66,6 +69,8 @@ export interface PlayerView {
   price: number | null;
   round: SaleRound | null;
   photoUrl: string | null;
+  hammerAt: number | null; // when the player was last sold or went unsold
+  bids: number | null;     // bids on the lot that sold them (null: allotted or assigned)
 }
 
 export interface TeamView {
@@ -97,6 +102,7 @@ export interface LotView {
   bids: Bid[];
   openedAt: number;
   timerEndsAt: number | null;
+  guessUntil: number | null; // until when the phones watching may guess the hammer price
   currentBid: number | null;
   leadingTeamId: string | null;
   nextMinBid: number;
@@ -117,6 +123,29 @@ export interface WatchlistEntry {
   starred: boolean;
   targetPrice?: number | null;
   note?: string;
+}
+
+/** How the phones' guesses on the last sale turned out. */
+export interface GuessResult {
+  lotId: string;
+  playerId: string;
+  price: number;
+  total: number;
+  top: { name: string | null; amount: number; off: number; tag: string }[];
+}
+
+/** A row of the best-guessers board. */
+export interface GuessBoardRow {
+  tag: string;
+  name: string | null;
+  points: number;
+  wins: number;
+}
+
+/** Sent beside the state: how many screens are connected, and how many have guessed on this lot. */
+export interface Presence {
+  watching: number;
+  guesses: number;
 }
 
 export type You =
@@ -144,6 +173,16 @@ export interface FactoryResetPreview {
   teamDevices: number;
 }
 
+/** A photo a player sent through their link, waiting for the organiser
+ *  (admin state only — no other screen sees it before it is approved). */
+export interface PendingPhotoView {
+  playerId: string;
+  path: string;        // quoted back on approve/reject, so only the photo you saw is acted on
+  url: string | null;
+  uploadedAt: number;
+  device: string;      // short fingerprint of the phone that sent it
+}
+
 export interface StateView {
   serverTime: number;
   version: number;
@@ -168,10 +207,13 @@ export interface StateView {
     auctionedInMain: number;
   };
   undoLabel: string | null;
+  guessResult: GuessResult | null;
+  guessBoard: GuessBoardRow[];
   you: You;
   admin?: {
     teamCodes: { teamId: string; code: string }[];
-    photoCodes: { playerId: string; code: string }[];
+    photoLinks: { playerId: string; code: string; openUntil: number | null }[]; // null = closed
+    pendingPhotos: PendingPhotoView[];
     teamSessions: { teamId: string; devices: number }[];
     warnings: string[];
   };

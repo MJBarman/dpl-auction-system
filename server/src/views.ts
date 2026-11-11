@@ -1,3 +1,4 @@
+import { BoardRow, GUESS_WINDOW_MS } from './audience';
 import { deviceTagOf } from './auth';
 import { Store, Session } from './db';
 import {
@@ -10,9 +11,13 @@ import { State } from './types';
 // Builds the wire payloads. Public state deliberately never includes team
 // join codes or the admin PIN; private extras are layered per role.
 
-export function publicState(state: State, undoLabel: string | null) {
+export function publicState(state: State, undoLabel: string | null, extras: { guessBoard?: BoardRow[] } = {}) {
+  const game = state.settings.audienceGame !== false;
+  const names = state.settings.audienceNames !== false;
   const summaries = allSummaries(state);
-  const lot = state.lot;
+  // A lot that points at a missing player (a bad backup, say) shows as no lot
+  // rather than failing every screen's state.
+  const lot = state.lot && state.players.some((p) => p.id === state.lot!.playerId) ? state.lot : null;
   let lotView: unknown = null;
   if (lot) {
     const leading = lot.bids[lot.bids.length - 1] ?? null;
@@ -22,6 +27,8 @@ export function publicState(state: State, undoLabel: string | null) {
       bids: lot.bids,
       openedAt: lot.openedAt,
       timerEndsAt: lot.timerEndsAt ?? null,
+      // Until when the phones watching may guess this player's hammer price.
+      guessUntil: game ? lot.openedAt + GUESS_WINDOW_MS : null,
       currentBid: leading?.amount ?? null,
       leadingTeamId: leading?.teamId ?? null,
       nextMinBid: nextMinBid(state),
@@ -54,6 +61,9 @@ export function publicState(state: State, undoLabel: string | null) {
       status: p.status, teamId: p.teamId ?? null, price: p.price ?? null,
       round: p.round ?? null,
       photoUrl: photoUrlFor(p.photoPath),
+      // For the play-by-play: when the hammer fell, and after how many bids.
+      hammerAt: p.hammerAt ?? null,
+      bids: p.bidCount ?? null,
     })),
     lot: lotView,
     timeout: state.timeout ?? null,
@@ -65,18 +75,40 @@ export function publicState(state: State, undoLabel: string | null) {
       auctionedInMain: state.mainAuctionCount ?? 0,
     },
     undoLabel,
+    // The audience's guessing game: how the last sale's guesses turned out and
+    // who guesses best. Names only while the organiser allows them.
+    guessResult: game && state.guessResult
+      ? { ...state.guessResult, top: state.guessResult.top.map((g) => ({ ...g, name: names ? g.name : null })) }
+      : null,
+    guessBoard: game ? (extras.guessBoard ?? []).map((r) => ({ ...r, name: names ? r.name : null })) : [],
   };
 }
 
 export function statePayloadFor(store: Store, session: Session | undefined) {
   const state = store.state;
-  const base = publicState(state, store.peekUndo()?.label ?? null) as Record<string, unknown>;
+  const base = publicState(state, store.peekUndo()?.label ?? null, {
+    guessBoard: store.audience.board(5, state.settings.audienceNames !== false),
+  }) as Record<string, unknown>;
   if (session?.role === 'admin') {
     base.you = { role: 'admin' };
     base.admin = {
       teamCodes: state.teams.map((t) => ({ teamId: t.id, code: t.code })),
-      // Secret per-player photo-upload codes — admin-only, like team codes.
-      photoCodes: state.players.map((p) => ({ playerId: p.id, code: p.photoCode ?? '' })),
+      // Secret per-player photo-upload codes — admin-only, like team codes —
+      // and until when each link takes uploads (null = closed).
+      photoLinks: state.players.map((p) => ({
+        playerId: p.id, code: p.photoCode ?? '', openUntil: p.photoLinkUntil ?? null,
+      })),
+      // Photos sent through a link, waiting for the organiser. Admin-only: no
+      // other screen ever sees a photo before it is approved.
+      pendingPhotos: state.players.flatMap((p) => (p.pendingPhoto
+        ? [{
+            playerId: p.id,
+            path: p.pendingPhoto.path,
+            url: photoUrlFor(p.pendingPhoto.path),
+            uploadedAt: p.pendingPhoto.uploadedAt,
+            device: p.pendingPhoto.device,
+          }]
+        : [])),
       // Live device counts: >1 device on a team's code is the tell-tale of a
       // forwarded join link, and the fix is one tap away (New code).
       teamSessions: state.teams.map((t) => ({ teamId: t.id, devices: store.countSessionsForTeam(t.id) })),

@@ -31,6 +31,9 @@ export interface Settings {
   timeoutEvery: number;   // strategic timeout after every N main-round players (0 = off)
   showTier: boolean;      // show tier names/chips on screens (off hides them everywhere)
   rulesOnScreen: boolean; // projector shows the rules board between lots
+  audienceGame: boolean;      // phones watching can guess each hammer price
+  audienceReactions: boolean; // emoji reactions from phones float on the screens
+  audienceNames: boolean;     // show guessers' names (off: amounts only)
   tiers: Tier[];
 }
 
@@ -69,8 +72,20 @@ export interface Player {
   price?: number | null;      // hammer price
   round?: SaleRound | null;
   offeredInPass?: boolean;    // offered in current accelerated pass
-  photoPath?: string | null;  // object path in the Supabase photo bucket
+  hammerAt?: number | null;   // when the player was last sold or went unsold (the play-by-play order)
+  bidCount?: number | null;   // bids on the lot that sold them (0 = unsold, null = allotted/assigned)
+  photoPath?: string | null;  // the approved photo: object path in the Supabase photo bucket
   photoCode?: string;         // secret in the player's photo-upload link
+  photoLinkUntil?: number | null;     // the link takes uploads until then (ms); null/absent = closed
+  pendingPhoto?: PendingPhoto | null; // sent through the link, waiting for the organiser
+}
+
+/** A photo a player sent through their link. It reaches the screens only once
+ *  the organiser approves it; until then the approved photo (or initials) stays. */
+export interface PendingPhoto {
+  path: string;       // object path under pending/ in the photo bucket
+  uploadedAt: number;
+  device: string;     // short fingerprint of the phone that sent it
 }
 
 export interface Team {
@@ -127,6 +142,15 @@ export interface TimeoutInfo {
   setNumber: number | null; // which set just completed; null = called manually
 }
 
+/** How the phones' guesses on a sold lot turned out: the closest few. */
+export interface GuessResult {
+  lotId: string;
+  playerId: string;
+  price: number;
+  total: number; // guesses made on the lot
+  top: { name: string | null; amount: number; off: number; tag: string }[];
+}
+
 export interface State {
   settings: Settings;
   teams: Team[];
@@ -138,6 +162,7 @@ export interface State {
   timeout: TimeoutInfo | null;
   // teamId -> playerId -> entry (private captain planning data)
   watchlists: Record<string, Record<string, WatchlistEntry>>;
+  guessResult?: GuessResult | null; // the audience's guesses on the last player sold
   migrations?: string[]; // one-time data top-ups already applied (see seed.ts)
   version: number; // bumped on every mutation
 }
@@ -150,7 +175,8 @@ export interface AuctionSnapshot {
   lot: Lot | null;
   mainAuctionCount?: number;
   timeout?: TimeoutInfo | null;
-  players: Pick<Player, 'id' | 'status' | 'teamId' | 'price' | 'round' | 'offeredInPass'>[];
+  players: Pick<Player, 'id' | 'status' | 'teamId' | 'price' | 'round' | 'offeredInPass' | 'hammerAt' | 'bidCount'>[];
+  guessResult?: GuessResult | null;
 }
 
 export interface TeamSummary {

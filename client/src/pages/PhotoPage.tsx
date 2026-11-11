@@ -1,11 +1,13 @@
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icon } from '../icons';
+import { agoText, photoDeviceId, toUploadBlob, untilText } from '../photoLinks';
 import { PlayerPhoto } from '../ui';
 
 /** Public photo-upload page behind a per-player secret link (/photo/CODE).
- *  Players get their link from the organiser and can revisit it any time to
- *  replace their photo. No login — the code in the URL is the credential. */
+ *  No login: the code in the URL is the credential. The link takes photos only
+ *  while the organiser has it open, and a photo reaches the auction screens
+ *  only once the organiser approves it. */
 
 interface PhotoInfo {
   name: string;
@@ -14,61 +16,48 @@ interface PhotoInfo {
   photoUrl: string | null;
   uploadsEnabled: boolean;
   maxBytes: number;
-}
-
-const TARGET_EDGE = 900; // longest edge after downscaling
-const JPEG_QUALITY = 0.85;
-
-/** Downscale + re-encode in the browser so uploads stay small (~100–300 KB)
- *  regardless of the 10 MB phone-camera original. Throws if the browser
- *  cannot decode the file (e.g. HEIC outside Safari). */
-async function toUploadBlob(file: File): Promise<Blob> {
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = objectUrl;
-    await img.decode();
-    const scale = Math.min(1, TARGET_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-    const w = Math.max(1, Math.round(img.naturalWidth * scale));
-    const h = Math.max(1, Math.round(img.naturalHeight * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas unavailable');
-    ctx.drawImage(img, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
-    if (!blob) throw new Error('Could not encode the image');
-    return blob;
-  } finally {
-    URL.revokeObjectURL(objectUrl);
-  }
+  link: 'open' | 'closed' | 'auction';
+  openUntil: number | null;
+  pendingSince: number | null;
+  serverTime: number;
 }
 
 export default function PhotoPage() {
-  const { code } = useParams();
+  const { code = '' } = useParams();
   const [info, setInfo] = useState<PhotoInfo | null>(null);
+  const [skew, setSkew] = useState(0); // our clock minus the server's
   const [pageError, setPageError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ blob: Blob; url: string } | null>(null);
+  const [sentUrl, setSentUrl] = useState<string | null>(null); // the photo sent from this page
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ text: string; kind: 'ok' | 'error' } | null>(null);
+  const [, setTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/photo/${encodeURIComponent(code)}`);
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error ?? 'This link is not valid');
+    const next = data as PhotoInfo;
+    setSkew(Date.now() - next.serverTime);
+    setInfo(next);
+  }, [code]);
 
   useEffect(() => {
     let alive = true;
-    fetch(`/api/photo/${code}`)
-      .then(async (res) => {
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.error ?? 'This link is not valid');
-        if (alive) setInfo(data as PhotoInfo);
-      })
-      .catch((e) => {
-        if (alive) setPageError(e instanceof Error ? e.message : 'Could not load this page');
-      });
+    load().catch((e) => {
+      if (alive) setPageError(e instanceof Error ? e.message : 'Could not load this page');
+    });
     return () => {
       alive = false;
     };
-  }, [code]);
+  }, [load]);
+
+  // Re-render each minute so an expiring link closes on screen too.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const choose = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,17 +80,24 @@ export default function PhotoPage() {
     setBusy(true);
     setNotice(null);
     try {
-      const res = await fetch(`/api/photo/${code}`, {
+      const res = await fetch(`/api/photo/${encodeURIComponent(code)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'image/jpeg' },
+        headers: { 'Content-Type': 'image/jpeg', 'X-Photo-Device': photoDeviceId() },
         body: preview.blob,
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error ?? `Upload failed (${res.status})`);
-      setInfo((i) => (i ? { ...i, photoUrl: data.photoUrl as string } : i));
-      URL.revokeObjectURL(preview.url);
+      if (!res.ok) {
+        if (res.status === 403) load().catch(() => {}); // the link closed meanwhile: show it closed
+        throw new Error(data?.error ?? `Upload failed (${res.status})`);
+      }
+      // The preview becomes "the photo you sent" (its object URL lives on).
+      setSentUrl((old) => {
+        if (old) URL.revokeObjectURL(old);
+        return preview.url;
+      });
       setPreview(null);
-      setNotice({ text: 'Photo saved! It is already live on the auction screens. You can come back to this link any time to change it.', kind: 'ok' });
+      setInfo((i) => (i ? { ...i, pendingSince: Date.now() - skew } : i));
+      setNotice({ text: 'Sent! Thank you — that’s all you need to do.', kind: 'ok' });
     } catch (e) {
       setNotice({ text: e instanceof Error ? e.message : 'Upload failed — please try again', kind: 'error' });
     } finally {
@@ -127,30 +123,66 @@ export default function PhotoPage() {
   }
   if (!info) return <div className="page-loading">Loading…</div>;
 
+  const now = Date.now() - skew;
+  const open = info.link === 'open' && info.openUntil !== null && now < info.openUntil;
+  const who = (
+    <p className="muted">
+      Hi <b>{info.name}</b>{info.role ? ` (${info.role}` : ''}{info.role && info.tierName ? `, ${info.tierName})` : info.role ? ')' : ''}!
+      {' '}This photo appears next to your name on the big screen and in the team dashboards during the auction.
+    </p>
+  );
+
+  if (!open) {
+    return (
+      <div className="photo-page">
+        <div className="card">
+          <h1><Icon name="camera" /> Your auction photo</h1>
+          {who}
+          <div className="photo-current">
+            <PlayerPhoto url={info.photoUrl} name={info.name} size="xl" />
+            <div className="stack">
+              <p className="photo-closed">
+                {info.link === 'auction' ? 'Photo uploads are closed now that the auction has started.' : 'This link is closed.'}
+              </p>
+              <p className="muted small">
+                {info.photoUrl ? 'This is your photo on the auction screens.' : 'The screens show your initials.'}
+                {info.link === 'auction' ? '' : ' To send a new photo, ask the organiser for a new link.'}
+              </p>
+            </div>
+          </div>
+          {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  let status: string;
+  if (sentUrl) status = 'This is the photo you sent. It goes on the auction screens once the organiser approves it.';
+  else if (info.pendingSince) status = `You sent a photo ${agoText(info.pendingSince, now)}. It is waiting for the organiser's approval — you can send a different one instead.`;
+  else if (info.photoUrl) status = 'This is your photo on the auction screens. Send a new one to replace it — the organiser checks it first.';
+  else status = 'No photo yet — the screens show your initials until the organiser approves one.';
+  const waiting = Boolean(sentUrl || info.pendingSince);
+
   return (
     <div className="photo-page">
       <div className="card">
         <h1><Icon name="camera" /> Your auction photo</h1>
-        <p className="muted">
-          Hi <b>{info.name}</b>{info.role ? ` (${info.role}` : ''}{info.role && info.tierName ? `, ${info.tierName})` : info.role ? ')' : ''}!
-          {' '}This photo appears next to your name on the big screen and in the team dashboards during the auction.
-        </p>
+        {who}
+        <p className="photo-deadline"><Icon name="timer" /> This link works until {untilText(info.openUntil!)}.</p>
 
         {!preview && (
           <div className="photo-current">
-            <PlayerPhoto url={info.photoUrl} name={info.name} size="xl" />
+            {sentUrl
+              ? <img className="player-photo xl" src={sentUrl} alt="The photo you sent" />
+              : <PlayerPhoto url={info.photoUrl} name={info.name} size="xl" />}
             <div className="stack">
-              <p className="muted small">
-                {info.photoUrl
-                  ? 'This is your current photo. Upload a new one to replace it.'
-                  : 'No photo yet — the screens show your initials until you upload one.'}
-              </p>
+              <p className="muted small">{status}</p>
               <button
                 className="btn primary big"
                 disabled={!info.uploadsEnabled}
                 onClick={() => fileRef.current?.click()}
               >
-                {info.photoUrl ? 'Choose a new photo' : 'Choose a photo'}
+                {waiting ? 'Send a different photo' : info.photoUrl ? 'Choose a new photo' : 'Choose a photo'}
               </button>
               {!info.uploadsEnabled && (
                 <p className="muted small">Uploads are temporarily unavailable — please try again later or tell the organiser.</p>
@@ -164,7 +196,7 @@ export default function PhotoPage() {
             <img src={preview.url} alt="Preview" />
             <div className="row" style={{ justifyContent: 'center' }}>
               <button className="btn primary big" style={{ width: 'auto' }} disabled={busy} onClick={upload}>
-                {busy ? 'Uploading…' : 'Looks good — upload'}
+                {busy ? 'Sending…' : 'Looks good — send it'}
               </button>
               <button className="btn" disabled={busy} onClick={cancelPreview}>Pick another</button>
             </div>
@@ -180,7 +212,10 @@ export default function PhotoPage() {
           style={{ display: 'none' }}
           onChange={choose}
         />
-        <p className="muted small">A clear, front-facing photo works best. Large photos are resized automatically before upload.</p>
+        <p className="muted small">
+          A clear, front-facing photo works best. Large photos are resized automatically before upload.
+          This link is just for you, so please don't forward it.
+        </p>
       </div>
     </div>
   );

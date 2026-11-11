@@ -328,6 +328,8 @@ export function sellLot(state: State, now: number, guard: HammerGuard = {}): { p
   player.teamId = leading.teamId;
   player.price = leading.amount;
   player.round = state.stage === 'accelerated' ? 'accelerated' : 'main';
+  player.hammerAt = now;
+  player.bidCount = lot.bids.length;
   state.lot = null;
   recordHammer(state, now);
   return { player, teamId: leading.teamId, price: leading.amount };
@@ -344,6 +346,8 @@ export function passLot(state: State, lotId?: string, now = Date.now()): Player 
   player.teamId = null;
   player.price = null;
   player.round = null;
+  player.hammerAt = now;
+  player.bidCount = 0;
   state.lot = null;
   recordHammer(state, now);
   return player;
@@ -400,7 +404,7 @@ export function startAccelerated(state: State): void {
  * open-slot team with the largest remaining purse (teams below the minimum
  * squad first). Returns the assignments made; throws if someone cannot be placed.
  */
-export function allotUnsold(state: State): { player: Player; teamId: string; price: number }[] {
+export function allotUnsold(state: State, now = Date.now()): { player: Player; teamId: string; price: number }[] {
   if (state.lot) throw new AuctionError('Close the current lot first');
   const unsold = state.players.filter((p) => p.status === 'unsold');
   if (unsold.length === 0) throw new AuctionError('No unsold players to allot');
@@ -425,13 +429,15 @@ export function allotUnsold(state: State): { player: Player; teamId: string; pri
     player.teamId = target.id;
     player.price = price;
     player.round = 'allotted';
+    player.hammerAt = now + out.length; // one after another, in allotment order
+    player.bidCount = null;
     out.push({ player, teamId: target.id, price });
   }
   return out;
 }
 
 /** Auctioneer override: assign a player to a team at a given price. */
-export function assignPlayer(state: State, playerId: string, teamId: string, price: number): void {
+export function assignPlayer(state: State, playerId: string, teamId: string, price: number, now = Date.now()): void {
   const player = getPlayer(state, playerId);
   const summary = teamSummary(state, teamId);
   if (state.lot?.playerId === playerId) throw new AuctionError('This player is currently up for auction — close the lot first');
@@ -446,6 +452,8 @@ export function assignPlayer(state: State, playerId: string, teamId: string, pri
   player.price = price;
   player.round = 'manual';
   player.offeredInPass = false;
+  player.hammerAt = now;
+  player.bidCount = null;
 }
 
 /** Auctioneer correction: return a sold player to the pool and refund the purse. */
@@ -457,6 +465,8 @@ export function releasePlayer(state: State, playerId: string): void {
   player.price = null;
   player.round = null;
   player.offeredInPass = false;
+  player.bidCount = null;
+  if (player.status === 'available') player.hammerAt = null; // back in the queue: no hammer has fallen
 }
 
 export function completeAuction(state: State, force = false): void {
@@ -485,12 +495,15 @@ export function resetAuction(state: State): void {
   state.lot = null;
   state.mainAuctionCount = 0;
   state.timeout = null;
+  state.guessResult = null;
   for (const p of state.players) {
     p.status = 'available';
     p.teamId = null;
     p.price = null;
     p.round = null;
     p.offeredInPass = false;
+    p.hammerAt = null;
+    p.bidCount = null;
   }
 }
 
@@ -512,14 +525,20 @@ export function takeSnapshot(state: State, label: string, now: number): AuctionS
       price: p.price ?? null,
       round: p.round ?? null,
       offeredInPass: p.offeredInPass ?? false,
+      hammerAt: p.hammerAt ?? null,
+      bidCount: p.bidCount ?? null,
     })),
+    guessResult: state.guessResult ? JSON.parse(JSON.stringify(state.guessResult)) : null,
   };
 }
 
 export function restoreSnapshot(state: State, snap: AuctionSnapshot): void {
   state.stage = snap.stage;
   state.currentTierKey = snap.currentTierKey;
-  state.lot = snap.lot ? JSON.parse(JSON.stringify(snap.lot)) : null;
+  // A lot whose player has been deleted since can't come back: every screen
+  // would fail to show it (undo after deleting an unsold player once did this).
+  const lotPlayerExists = !!snap.lot && state.players.some((p) => p.id === snap.lot!.playerId);
+  state.lot = snap.lot && lotPlayerExists ? JSON.parse(JSON.stringify(snap.lot)) : null;
   // Older snapshots (pre-timeout feature) leave the current values in place.
   if (snap.mainAuctionCount !== undefined) state.mainAuctionCount = snap.mainAuctionCount;
   if (snap.timeout !== undefined) state.timeout = snap.timeout ? { ...snap.timeout } : null;
@@ -532,6 +551,12 @@ export function restoreSnapshot(state: State, snap: AuctionSnapshot): void {
     p.price = s.price;
     p.round = s.round;
     p.offeredInPass = s.offeredInPass;
+    // Snapshots from before these fields existed leave the current values alone.
+    if ('hammerAt' in s) p.hammerAt = s.hammerAt ?? null;
+    if ('bidCount' in s) p.bidCount = s.bidCount ?? null;
+  }
+  if (snap.guessResult !== undefined) {
+    state.guessResult = snap.guessResult ? JSON.parse(JSON.stringify(snap.guessResult)) : null;
   }
 }
 
@@ -580,7 +605,7 @@ export function feasibilityWarnings(state: State): string[] {
     warnings.push(`Pool has ${n} players but ${teams.length} teams × min ${settings.minSquad} needs ${lo}. Lower the minimum squad or add players.`);
   }
   if (n > hi) {
-    warnings.push(`Pool has ${n} players but ${teams.length} teams × max ${settings.maxSquad} caps at ${hi}. ${n - hi} player(s) cannot be sold — raise the maximum squad or trim the pool.`);
+    warnings.push(`Pool has ${n} players but ${teams.length} teams × max ${settings.maxSquad} caps at ${hi}. ${n - hi} player(s) cannot be sold — take any captains out of the pool, trim it, or raise the maximum squad.`);
   }
   const minSpend = players.reduce((sum, p) => sum + basePriceOf(state, p), 0);
   const combined = teams.length * settings.purse;

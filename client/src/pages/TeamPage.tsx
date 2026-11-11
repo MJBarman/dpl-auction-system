@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, signOutOnServer } from '../api';
 import { Icon } from '../icons';
 import { clearSession, loadSession } from '../session';
 import { useApp } from '../store';
@@ -56,7 +56,7 @@ export default function TeamPage() {
           <div>
             <div className="brand">{team.name}</div>
             <div className="muted small">
-              Capt. {team.captain} — your private dashboard
+              {team.captain ? `Capt. ${team.captain} — ` : ''}your private dashboard
               {you.role === 'team' && you.deviceTag ? ` · device #${you.deviceTag}` : ''}
             </div>
           </div>
@@ -70,7 +70,7 @@ export default function TeamPage() {
           <ThemeToggle />
           <BidSoundToggle muted={muted} onToggle={toggleMuted} />
           <ConnectionDot connected={connected} />
-          <button className="btn ghost" onClick={() => { clearSession(); refresh(); navigate('/'); }}>Exit</button>
+          <button className="btn ghost" onClick={async () => { await signOutOnServer(); clearSession(); refresh(); navigate('/'); }}>Exit</button>
         </div>
       </header>
 
@@ -438,7 +438,7 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
   return (
     <div className="card">
       <h2 style={{ color: team.color }}>{team.name} — {roster.length} bought</h2>
-      <p className="muted small">Plus captain {team.captain}. Spent {fmt(team.spent)} of {fmt(team.purse)} pts.</p>
+      <p className="muted small">Plus {team.captain ? `captain ${team.captain}` : 'your captain'}. Spent {fmt(team.spent)} of {fmt(team.purse)} pts.</p>
       {roster.length === 0 ? (
         <p className="muted">No players yet — your spends will appear here the moment the hammer falls.</p>
       ) : (
@@ -465,9 +465,15 @@ function SquadTab({ state, teamId }: { state: StateView; teamId: string }) {
 
 function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: string; watchlist: Record<string, WatchlistEntry> }) {
   const run = useAction();
-  const [filter, setFilter] = useState<'all' | 'available' | 'hot' | 'starred'>('available');
+  const [chosenFilter, setFilter] = useState<'all' | 'available' | 'hot' | 'starred'>('available');
   const [editing, setEditing] = useState<PlayerView | null>(null);
   const showTier = state.settings.showTier !== false;
+  // Columns and filters that only make sense when the pool has them.
+  const hasMvp = state.players.some((p) => p.stats.mvpTotal != null);
+  const hasHotList = state.players.some((p) => p.demandRank);
+  const filters = (['available', 'hot', 'starred', 'all'] as const).filter((f) => f !== 'hot' || hasHotList);
+  // A hot list cleared while it was showing falls back to "Still to buy".
+  const filter = chosenFilter === 'hot' && !hasHotList ? 'available' : chosenFilter;
 
   const players = useMemo(() => {
     let list = [...state.players];
@@ -493,19 +499,20 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
       <div className="row space-between wrap">
         <h2>Player pool</h2>
         <div className="row">
-          {(['available', 'hot', 'starred', 'all'] as const).map((f) => (
-            <button key={f} className={`tab${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
+          {filters.map((f) => (
+            <button key={f} data-filter={f} className={`tab${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
               {f === 'available' ? 'Still to buy' : f === 'hot' ? <><Icon name="fire" /> Hot list</> : f === 'starred' ? <><Icon name="star" /> Watchlist</> : 'Everyone'}
             </button>
           ))}
         </div>
       </div>
       <p className="muted small">
-        Tap a player for their full DTC 1 + DTC 2 record. <Icon name="star" /> Stars, target prices and notes are private to your team — nobody else can see them.
+        Tap a player {hasMvp ? 'for their full record, a target price or a note' : 'to set a target price or a note'}.
+        {' '}<Icon name="star" /> Stars, target prices and notes are private to your team — nobody else can see them.
       </p>
       <div className="table-scroll">
       <table className="table pool-table">
-        <thead><tr><th></th><th>Player</th>{showTier && <th>Tier</th>}<th className="hide-narrow">Role</th><th>MVP</th><th>Base</th><th>My target</th><th>Status</th></tr></thead>
+        <thead><tr><th></th><th>Player</th>{showTier && <th>Tier</th>}<th className="hide-narrow">Role</th>{hasMvp && <th>MVP</th>}<th>Base</th><th>My target</th><th>Status</th></tr></thead>
         <tbody>
           {players.map((p) => {
             const wl = watchlist[p.id];
@@ -522,7 +529,7 @@ function PoolTab({ state, teamId, watchlist }: { state: StateView; teamId: strin
                 </td>
                 {showTier && <td><TierBadge state={state} tierKey={p.tierKey} /></td>}
                 <td className="muted small hide-narrow">{p.role}</td>
-                <td className="num">{p.stats.mvpTotal != null ? p.stats.mvpTotal.toFixed(2) : <span className="muted small">new</span>}</td>
+                {hasMvp && <td className="num">{p.stats.mvpTotal != null ? p.stats.mvpTotal.toFixed(2) : <span className="muted small">—</span>}</td>}
                 <td className="num">{fmt(p.basePrice)}</td>
                 <td className="num">{wl?.targetPrice != null ? fmt(wl.targetPrice) : '—'}</td>
                 <td>

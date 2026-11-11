@@ -6,7 +6,9 @@ import type { ReactNode } from 'react';
 
 export type IconName =
   | 'gavel' | 'timer' | 'undo' | 'pause' | 'check' | 'star' | 'fire' | 'note'
-  | 'warning' | 'camera' | 'download' | 'upload' | 'clipboard' | 'close' | 'user' | 'monitor';
+  | 'warning' | 'camera' | 'download' | 'upload' | 'clipboard' | 'close' | 'user' | 'monitor' | 'send'
+  | 'eye' | 'target' | 'share' | 'shield' | 'rows' | 'radio' | 'more' | 'volume' | 'mute' | 'vibrate'
+  | 'install' | 'lock' | 'trophy' | 'chevron' | 'sun' | 'phone';
 
 const PATHS: Record<IconName, ReactNode> = {
   gavel: <><path d="M14 3l7 7-3 3-7-7z" /><path d="M14.5 9.5L5 19" /><path d="M3 21.25h9" /></>,
@@ -25,6 +27,23 @@ const PATHS: Record<IconName, ReactNode> = {
   close: <path d="M5 5l14 14M19 5L5 19" />,
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21c.8-4.3 4-6.5 8-6.5s7.2 2.2 8 6.5" /></>,
   monitor: <><path d="M2.5 4.5h19v12h-19z" /><path d="M8 20.5h8M12 16.5v4" /></>,
+  send: <><path d="M21 3L3 10.5l7.5 3L14 21z" /><path d="M21 3L10.5 13.5" /></>,
+  eye: <><path d="M2 12c2.5-4.4 6-6.5 10-6.5s7.5 2.1 10 6.5c-2.5 4.4-6 6.5-10 6.5S4.500 16.400 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+  target: <><circle cx="12" cy="12" r="8.500" /><circle cx="12" cy="12" r="4.500" /><circle cx="12" cy="12" r=".75" /></>,
+  share: <><path d="M12 15.500V3.500M7.500 8l4.500-4.500L16.500 8" /><path d="M5 11.500v9h14v-9" /></>,
+  shield: <path d="M12 3l7.500 2.500v6c0 4.500-3 8-7.500 9.500-4.500-1.500-7.500-5-7.500-9.500v-6z" />,
+  rows: <path d="M4 6.500h16M4 12h16M4 17.500h16" />,
+  radio: <><circle cx="12" cy="12" r="2" /><path d="M7.800 7.800a6 6 0 0 0 0 8.400M16.200 7.800a6 6 0 0 1 0 8.400M4.900 4.900a10 10 0 0 0 0 14.200M19.100 4.900a10 10 0 0 1 0 14.200" /></>,
+  more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+  volume: <><path d="M4 9.500h3.500l5-4.500v14l-5-4.500H4z" /><path d="M16 9a4.200 4.200 0 0 1 0 6M18.500 6.500a7.800 7.800 0 0 1 0 11" /></>,
+  mute: <><path d="M4 9.500h3.500l5-4.500v14l-5-4.500H4z" /><path d="M16.500 9.500l5 5M21.500 9.500l-5 5" /></>,
+  vibrate: <><path d="M8.500 4.500h7v15h-7z" /><path d="M5 9v6M2.500 10.500v3M19 9v6M21.500 10.500v3" /></>,
+  install: <><path d="M4.500 4.500h15v15h-15z" /><path d="M12 8.500v7M8.500 12h7" /></>,
+  lock: <><path d="M6 10.500h12V20H6z" /><path d="M8.500 10.500v-3a3.500 3.500 0 0 1 7 0v3" /></>,
+  trophy: <><path d="M7.500 4h9v5a4.500 4.500 0 0 1-9 0z" /><path d="M7.500 5.500h-3V7a3 3 0 0 0 3 3M16.500 5.500h3V7a3 3 0 0 1-3 3M12 13.500v4M8.500 20h7" /></>,
+  chevron: <path d="M9 5l7 7-7 7" />,
+  sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2.500v3M12 18.500v3M2.500 12h3M18.500 12h3M5.300 5.300l2.100 2.100M16.600 16.600l2.100 2.100M5.300 18.700l2.100-2.100M16.600 7.400l2.100-2.100" /></>,
+  phone: <><path d="M7.500 2.500h9v19h-9z" /><path d="M11 18.500h2" /></>,
 };
 
 export function Icon({ name, filled = false }: { name: IconName; filled?: boolean }) {

@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { StorageClient } from '@supabase/storage-js';
 import { AuctionError } from './engine';
 
@@ -46,6 +47,27 @@ export interface SniffedImage {
   contentType: 'image/jpeg' | 'image/png' | 'image/webp';
 }
 
+/** Width and height from a JPEG's frame header (SOF0–SOF15, except the DHT,
+ *  JPG and DAC markers), or null if the bytes are not a well-formed JPEG. */
+export function jpegSize(buf: Buffer): { width: number; height: number } | null {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < buf.length) {
+    if (buf[i] !== 0xff) return null;
+    const marker = buf[i + 1];
+    if (marker === 0xff) { i += 1; continue; } // fill byte
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) { i += 2; continue; } // markers without a length
+    if (marker === 0xd9 || marker === 0xda) return null; // end of image / start of scan before any frame
+    const len = buf.readUInt16BE(i + 2);
+    if (len < 2) return null;
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    i += 2 + len;
+  }
+  return null;
+}
+
 /** Identify the image type from magic bytes — never trust the client's header. */
 export function sniffImage(buf: Buffer): SniffedImage | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
@@ -67,6 +89,28 @@ export async function uploadPhoto(path: string, body: Buffer, contentType: strin
     upsert: false,
   });
   if (error) throw new AuctionError(`Could not store the photo: ${error.message}`, 502);
+}
+
+/** Move an object inside the bucket (server side, no re-upload). Approving a
+ *  pending photo moves it from pending/ to players/, so players/ only ever
+ *  holds photos the organiser approved (scripts/relink-photos.mjs relies on it). */
+export async function movePhoto(from: string, to: string): Promise<void> {
+  const { error } = await bucket().move(from, to);
+  if (error) throw new AuctionError(`Could not publish the photo: ${error.message}`, 502);
+}
+
+/** Where an upload lands: players/ for the organiser's own uploads (live at
+ *  once), pending/ for photos sent through a player's link (await approval).
+ *  Every upload gets a fresh path, so every public URL stays immutable. */
+export function newPhotoPath(folder: 'players' | 'pending', playerId: string, ext: string): string {
+  // The random tail keeps a waiting photo's public URL unguessable; the
+  // leading timestamp still sorts the folder (relink-photos.mjs parseInts it).
+  return `${folder}/${playerId}/${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`;
+}
+
+/** The players/ path a pending photo moves to when it is approved. */
+export function approvedPathFor(pendingPath: string): string {
+  return pendingPath.replace(/^pending\//, 'players/');
 }
 
 /** Best-effort delete of a replaced photo — a leftover object is harmless. */

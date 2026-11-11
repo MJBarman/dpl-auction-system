@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "tsx --test src/engine.test.ts"
+    "test": "tsx --test src/engine.test.ts src/photoLinks.test.ts src/audience.test.ts src/where.test.ts"
   },
   "dependencies": {
     "@supabase/storage-js": "2.110.2",

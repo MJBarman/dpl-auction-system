@@ -1,10 +1,14 @@
 import { CSSProperties, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import QRCode from 'qrcode';
+import { serverNow } from '../clock';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Icon } from '../icons';
 import { useApp } from '../store';
-import { LotView, PlayerView, StateView, TeamView, Tier } from '../types';
+import { GuessResult, LotView, PlayerView, StateView, TeamView, Tier } from '../types';
+import { ScreenReactions } from '../watch/Reactions';
 import {
   auctionRules, flatReserve, fmt, formatClock, freshMaxBid, lastTeamBuying, OfflineBanner, overallRank, PlayerPhoto,
-  SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown, useDrawSound,
+  poolHasRecords, SCREEN_BID_MUTE_KEY, statGroups, statLine, TIMEOUT_COUNTDOWN_MS, useBidSound, useCountdown, useDrawSound,
   useLotOpened, useSoldSound,
 } from '../ui';
 import { useTheme } from '../theme';
@@ -65,7 +69,7 @@ const REVEAL_LIFT_MS = 450;
  *  The browser drops the lock whenever the tab is hidden, so it is taken
  *  again each time the page comes back. Needs HTTPS or localhost; elsewhere
  *  (or on battery saver) the request fails and the screen may still sleep. */
-function useWakeLock() {
+export function useWakeLock() {
   useEffect(() => {
     if (!('wakeLock' in navigator)) return;
     let lock: WakeLockSentinel | null = null;
@@ -121,7 +125,96 @@ function usePhotoPreload(players: PlayerView[] | undefined) {
 }
 
 export default function ScreenPage() {
-  const { state, connected } = useApp();
+  const [params] = useSearchParams();
+  // A phone gets the watch page (the projector layout is built for a wall):
+  // a small screen you touch. A small laptop window is not a phone — it is
+  // often the projector's window before it goes full screen — and
+  // /screen?big=1 keeps the big layout anywhere.
+  const phone = useMemo(
+    () => !params.has('big')
+      && Math.min(window.innerWidth, window.innerHeight) < 560
+      && window.matchMedia('(pointer: coarse)').matches,
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  return phone ? <Navigate to="/watch" replace /> : <Projector forceQr={params.has('qr')} />;
+}
+
+/** The QR code that opens the phone view. A projector opened as "localhost"
+ *  (on the laptop that runs the server) asks the server for its address on the
+ *  Wi-Fi, since no phone can open "localhost"; with no network there is no QR
+ *  (`force` shows one anyway, for testing). */
+function useWatchQr(size: number, force: boolean): { src: string | null; label: string } {
+  const { origin, hostname } = window.location;
+  const local = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+  const [base, setBase] = useState<string | null>(local && !force ? null : origin);
+  useEffect(() => {
+    if (!local || force) return;
+    let alive = true;
+    fetch('/api/where')
+      .then((r) => r.json())
+      .then((d) => {
+        const first: unknown = Array.isArray(d?.lan) ? d.lan[0] : null;
+        if (alive && typeof first === 'string' && /^https?:\/\/[\w.:[\]-]+$/.test(first)) setBase(first);
+      })
+      .catch(() => { /* no QR: nothing a phone could open */ });
+    return () => {
+      alive = false;
+    };
+  }, [local, force]);
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!base) return;
+    let alive = true;
+    QRCode.toDataURL(`${base}/watch`, { margin: 1, width: size, errorCorrectionLevel: 'M' })
+      .then((data) => {
+        if (alive) setSrc(data);
+      })
+      .catch(() => { /* no QR: the address under it still works */ });
+    return () => {
+      alive = false;
+    };
+  }, [base, size]);
+  return { src, label: base ? `${base.replace(/^https?:\/\//, '')}/watch` : '' };
+}
+
+/** Before the start: a board that tells the room how to follow on a phone. */
+function WatchBoard({ force }: { force: boolean }) {
+  const { src, label } = useWatchQr(560, force);
+  if (!src) return null;
+  return (
+    <div className="scr-board scr-watch-board">
+      <div className="scr-board-title">Follow on your phone</div>
+      <div className="scr-watch-body">
+        <img src={src} alt="QR code: open the auction on your phone" data-watch-url={label} />
+        <div className="scr-watch-text">
+          <div className="scr-watch-head">Scan to watch live</div>
+          <ul>
+            <li>Every bid as it happens</li>
+            <li>Back a team and follow its squad</li>
+            <li>Guess each hammer price</li>
+            <li>React and share the big buys</li>
+          </ul>
+          <div className="scr-watch-url">{label}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** In the breaks: the same QR, small, in the top corner. */
+function WatchChip({ force }: { force: boolean }) {
+  const { src, label } = useWatchQr(300, force);
+  if (!src) return null;
+  return (
+    <div className="scr-qr">
+      <img src={src} alt="QR code: open the auction on your phone" data-watch-url={label} />
+      <span>Watch on your phone</span>
+    </div>
+  );
+}
+
+function Projector({ forceQr }: { forceQr: boolean }) {
+  const { state, connected, presence } = useApp();
   usePhotoPreload(state?.players);
   // Chime on each new bid; the projector keeps its own mute preference,
   // independent of the auctioneer's console.
@@ -281,6 +374,11 @@ export default function ScreenPage() {
           {stageLabel}
         </div>
         <div className="scr-head-right">
+          {presence && presence.watching > 1 && (
+            <div className="scr-watching" title="Screens connected right now">
+              <Icon name="eye" /> {presence.watching}
+            </div>
+          )}
           <button
             type="button"
             className="scr-theme"
@@ -319,14 +417,26 @@ export default function ScreenPage() {
               ? <TimeoutBoard state={state} />
               : state.settings.rulesOnScreen
                 ? <RulesBoard state={state} />
-                : <ScreenIdle state={state} showTier={showTier} />}
+                : <ScreenIdle state={state} showTier={showTier} forceQr={forceQr} />}
       </main>
+
+      {/* in the breaks, how to follow on a phone (before the start it is a board of its own) */}
+      {(view === 'timeout' || view === 'final' || view === 'rules'
+        || (view === 'idle' && state.stage === 'setup' && state.players.some((p) => p.demandRank)))
+        && <WatchChip force={forceQr} />}
+      {state.settings.audienceReactions && <ScreenReactions />}
 
       {view !== 'timeout' && view !== 'final' && (
         <TeamsFooter state={state} leadingId={leading?.id ?? null} prevPurse={prevPurseRef.current} />
       )}
 
-      {flash && <FlashOverlay key={flash.id} flash={flash} />}
+      {flash && (
+        <FlashOverlay
+          key={flash.id}
+          flash={flash}
+          guess={state.guessResult?.playerId === flash.player.id ? state.guessResult : null}
+        />
+      )}
       {reveal && <RevealOverlay key={reveal.id} reveal={reveal} />}
     </div>
   );
@@ -368,7 +478,7 @@ function ScreenLot({ state, lot, player, tier, leading }: {
         <div key={`plate-${leadKey}`} className={`scr-plate${leading ? (darkInk(leading.color) ? ' dark-ink' : '') : ' open'}`}>
           <span>{leading ? `Leading — ${leading.name}` : 'Who will open the bidding?'}</span>
         </div>
-        <div className="scr-nextmin">Next bid ≥ <b>{fmt(lot.nextMinBid)}</b></div>
+        <div className="scr-nextmin">Next bid ≥ <b>{fmt(lot.nextMinBid)}</b><GuessCount state={state} /></div>
         <BidFeed state={state} lot={lot} />
       </div>
 
@@ -437,9 +547,9 @@ function PlayerPanel({ player, players, tier, children }: {
             </div>
           ))}
         </div>
-      ) : (
-        <div className="scr-debut">First DTC season — no DTC 1 or DTC 2 record</div>
-      )}
+      ) : poolHasRecords(players) ? (
+        <div className="scr-debut">No match record on file</div>
+      ) : null}
       {player.notes && <p className="scr-notes">{player.notes}</p>}
     </div>
   );
@@ -462,7 +572,14 @@ function LotContext({ state, player, tier }: { state: StateView; player: PlayerV
   );
 }
 
-function lotContext(state: StateView, player: PlayerView, tier?: Tier): { parts: string[]; alert: string | null } {
+/** How many phones have guessed this player's price (nothing until the first guess). */
+function GuessCount({ state }: { state: StateView }) {
+  const guesses = useApp((s) => s.presence?.guesses ?? 0);
+  if (!state.settings.audienceGame || guesses === 0) return null;
+  return <span className="scr-guess-count"><Icon name="target" /> {guesses} guess{guesses === 1 ? '' : 'es'} from the phones</span>;
+}
+
+export function lotContext(state: StateView, player: PlayerView, tier?: Tier): { parts: string[]; alert: string | null } {
   const parts: string[] = [];
   let alert: string | null = null;
   if (state.stage === 'accelerated') {
@@ -538,11 +655,7 @@ function BidFeed({ state, lot }: { state: StateView; lot: LotView }) {
 /** Countdown with clock-skew correction plus the ring fraction. The total is
  *  captured from the first tick after each timerEndsAt value, so the ring
  *  starts full no matter what duration the auctioneer chose. */
-function useHammer(endsAt: number | null, serverTime: number): { secs: number | null; frac: number } {
-  const skewRef = useRef(0);
-  useEffect(() => {
-    skewRef.current = Date.now() - serverTime;
-  }, [serverTime]);
+function useHammer(endsAt: number | null, _serverTime?: number): { secs: number | null; frac: number } {
   const totalRef = useRef<{ endsAt: number; totalMs: number } | null>(null);
   const [snap, setSnap] = useState<{ secs: number | null; frac: number }>({ secs: null, frac: 0 });
   useEffect(() => {
@@ -552,7 +665,7 @@ function useHammer(endsAt: number | null, serverTime: number): { secs: number | 
       return;
     }
     const tick = () => {
-      const remaining = Math.max(0, endsAt - (Date.now() - skewRef.current));
+      const remaining = Math.max(0, endsAt - serverNow());
       if (!totalRef.current || totalRef.current.endsAt !== endsAt) {
         totalRef.current = { endsAt, totalMs: Math.max(remaining, 1000) };
       }
@@ -581,7 +694,7 @@ function CountdownRing({ secs, frac }: { secs: number; frac: number }) {
 
 /* ---------------- idle ---------------- */
 
-function ScreenIdle({ state, showTier }: { state: StateView; showTier: boolean }) {
+function ScreenIdle({ state, showTier, forceQr }: { state: StateView; showTier: boolean; forceQr: boolean }) {
   const recent = state.players.filter((p) => p.status === 'sold').slice().reverse().slice(0, 12);
   const watermark = state.settings.auctionName.split(/\s+/).slice(0, 3).join(' ');
   const marquee = recent.length >= 4;
@@ -590,6 +703,12 @@ function ScreenIdle({ state, showTier }: { state: StateView; showTier: boolean }
     .filter((p) => p.demandRank)
     .sort((a, b) => (a.demandRank ?? 0) - (b.demandRank ?? 0));
   const { head, detail } = idleHeadline(state, showTier);
+  // Before the start, with no hot list beside the categories, that place tells
+  // the room how to follow on a phone.
+  const watchBoard = state.stage === 'setup' && hot.length === 0;
+  const boards = Number(showTier) + Number(hot.length > 0) + Number(watchBoard);
+  const guess = state.guessResult;
+  const guessed = guess && guess.total > 0 ? state.players.find((p) => p.id === guess.playerId && p.status === 'sold') : undefined;
   return (
     <div className="scr-idle">
       <div className="scr-watermark" aria-hidden>{watermark}</div>
@@ -597,10 +716,20 @@ function ScreenIdle({ state, showTier }: { state: StateView; showTier: boolean }
         {head}
         {detail && <span className="scr-idle-detail">{detail}</span>}
       </div>
-      {(showTier || hot.length > 0) && (
-        <div className={`scr-boards${showTier && hot.length > 0 ? ' two' : ''}`}>
+      {guess && guessed && (
+        <div className="scr-guess-line">
+          <Icon name="target" />
+          <span>Closest guess on {guessed.name}</span>
+          <b>{guess.top[0].name ?? 'a fan'}</b>
+          <span>{fmt(guess.top[0].amount)} · {guess.top[0].off === 0 ? 'spot on' : `${fmt(guess.top[0].off)} off`}</span>
+          <em>{guess.total} guess{guess.total === 1 ? '' : 'es'}</em>
+        </div>
+      )}
+      {boards > 0 && (
+        <div className={`scr-boards${boards === 2 ? ' two' : ''}`}>
           {showTier && <CategoryBoard state={state} />}
           {hot.length > 0 && <HotListBoard state={state} players={hot} showTier={showTier} />}
+          {watchBoard && <WatchBoard force={forceQr} />}
         </div>
       )}
       {/* once the main round is over, the headline carries this */}
@@ -639,7 +768,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
  *  draw's category with how many are left in it and their base price (the
  *  draw walks the categories in order, like the engine), or what comes next
  *  once the main round is over. */
-function idleHeadline(state: StateView, showTier: boolean): { head: ReactNode; detail: string | null } {
+export function idleHeadline(state: StateView, showTier: boolean): { head: ReactNode; detail: string | null } {
   if (state.stage === 'setup') return { head: 'The auction begins shortly', detail: null };
   const last = lastTeamBuying(state);
   if (last) return { head: `${last.name} take the rest at base price`, detail: null };
@@ -939,7 +1068,7 @@ function TeamsFooter({ state, leadingId, prevPurse }: {
 
 /* ---------------- SOLD / UNSOLD takeover ---------------- */
 
-function FlashOverlay({ flash }: { flash: FlashInfo }) {
+function FlashOverlay({ flash, guess }: { flash: FlashInfo; guess: GuessResult | null }) {
   const color = flash.teamColor ?? '#64748b';
   const dark = flash.kind === 'sold' && darkInk(color);
 
@@ -989,6 +1118,11 @@ function FlashOverlay({ flash }: { flash: FlashInfo }) {
               ))}
               <span className="pts">PTS</span>
             </span>
+            {guess && guess.total > 0 && (
+              <span className="scr-payoff-guess">
+                <Icon name="target" /> Closest guess: {guess.top[0].name ?? 'a fan'} · {fmt(guess.top[0].amount)}
+              </span>
+            )}
           </div>
         ) : (
           <div className="scr-payoff unsold-line">Base {fmt(flash.player.basePrice)} — no bids</div>
@@ -1093,7 +1227,7 @@ interface Award {
  * best value — most MVP points per point spent among the rest. Players with
  * no DTC record can only be the top buy.
  */
-function finalAwards(state: StateView): Award[] {
+export function finalAwards(state: StateView): Award[] {
   const sold = state.players.filter((p) => p.status === 'sold' && p.price !== null);
   const mvp = (p: PlayerView) => p.stats.mvpTotal ?? 0;
   const price = (p: PlayerView) => p.price ?? 0;
@@ -1110,6 +1244,8 @@ function finalAwards(state: StateView): Award[] {
   const steal = pick(sold.filter((p) => mvp(p) > 0 && price(p) === p.basePrice), (a, b) => mvp(b) - mvp(a));
   const value = pick(sold.filter((p) => mvp(p) > 0 && price(p) > 0), (a, b) => mvp(b) / price(b) - mvp(a) / price(a));
 
+  const war = pick(sold.filter((p) => (p.bids ?? 0) >= 3), (a, b) => (b.bids ?? 0) - (a.bids ?? 0) || price(b) - price(a));
+
   const awards: Award[] = [];
   if (top) {
     const over = price(top) > top.basePrice && top.basePrice > 0;
@@ -1121,16 +1257,18 @@ function finalAwards(state: StateView): Award[] {
   }
   if (value) awards.push({ key: 'value', title: 'Best value', caption: 'most MVP pts per point', player: value, team: team(value), detail: mvpPts(value) });
   if (steal) awards.push({ key: 'steal', title: 'Steal at base', caption: 'best record at base price', player: steal, team: team(steal), detail: mvpPts(steal) });
-  return awards;
+  if (war) awards.push({ key: 'war', title: 'Bidding war', caption: 'most bids', player: war, team: team(war), detail: `${war.bids} bids` });
+  return awards.slice(0, 3);
 }
 
 function FinalBoard({ state }: { state: StateView }) {
   const awards = finalAwards(state);
+  const eye = state.guessBoard[0];
   return (
     <div className="scr-final">
       <div className="scr-final-title">Auction complete</div>
       <div className="scr-final-sub">{state.settings.auctionName}</div>
-      {awards.length > 0 && (
+      {(awards.length > 0 || eye) && (
         <div className="scr-awards">
           {awards.map((a, i) => (
             <div key={a.key} className="scr-award" style={vars({ '--i': i, '--team': a.team?.color ?? '#64748b' })}>
@@ -1145,6 +1283,19 @@ function FinalBoard({ state }: { state: StateView }) {
               </div>
             </div>
           ))}
+          {eye && (
+            <div className="scr-award" style={vars({ '--i': awards.length, '--team': '#8dfe8e' })}>
+              <div className="scr-award-title"><b>Sharpest eye</b> · best guesser on the phones</div>
+              <div className="scr-award-body">
+                <span className="scr-award-icon"><Icon name="trophy" /></span>
+                <span className="awho">
+                  <span className="aname">{eye.name ?? 'A fan'}</span>
+                  <span className="ateam">{eye.wins} closest guess{eye.wins === 1 ? '' : 'es'}</span>
+                </span>
+                <span className="afig">{eye.points}<small>points</small></span>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <div className="scr-final-grid">

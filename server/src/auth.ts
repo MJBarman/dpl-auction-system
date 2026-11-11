@@ -41,11 +41,11 @@ export function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
+/** The bearer token, from the Authorization header only: a token in a URL
+ *  ends up in browser history, download lists and proxy logs. */
 export function tokenFromRequest(req: Request): string | null {
   const header = req.headers.authorization;
-  if (header && header.startsWith('Bearer ')) return header.slice(7).trim();
-  const q = req.query.token;
-  if (typeof q === 'string' && q) return q;
+  if (header && header.startsWith('Bearer ')) return header.slice(7).trim() || null;
   return null;
 }
 
@@ -73,23 +73,56 @@ export function requireTeam(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
-/** Tiny fixed-window rate limiter for the login endpoints. */
-export function loginRateLimiter(maxPerMinute = 20) {
+interface LimitOptions {
+  max: number;                       // requests (or failures) per window
+  windowMs?: number;
+  key?: (req: Request) => string;    // default: the client address (needs `trust proxy` behind a proxy)
+  failuresOnly?: boolean;            // count only failed answers…
+  isFailure?: (status: number) => boolean; // …as judged by this (default: 400 and up)
+  countWhen?: (status: number) => boolean; // or: count only answers this says yes to (e.g. accepted ones)
+  message?: string;                  // the 429 text
+}
+
+/** Tiny fixed-window rate limiter. With `failuresOnly`, people who type the
+ *  right PIN or code never use up the budget, and one visitor's wrong guesses
+ *  never lock anybody else out (with `trust proxy` set right, see index.ts).
+ *  Old windows are swept, so the map can't grow without limit. */
+export function rateLimiter({
+  max, windowMs = 60_000, key = (req) => req.ip ?? 'unknown', failuresOnly = false, isFailure = (status) => status >= 400,
+  countWhen, message = 'Too many attempts — wait a minute and try again',
+}: LimitOptions) {
+  const judged = countWhen ?? (failuresOnly ? isFailure : null);
   const hits = new Map<string, { count: number; windowStart: number }>();
-  return (req: Request, res: Response, next: NextFunction) => {
-    const key = req.ip ?? 'unknown';
+  const sweep = setInterval(() => {
     const now = Date.now();
-    const entry = hits.get(key);
-    if (!entry || now - entry.windowStart > 60_000) {
-      hits.set(key, { count: 1, windowStart: now });
-      next();
+    for (const [k, e] of hits) if (now - e.windowStart > windowMs) hits.delete(k);
+  }, windowMs);
+  sweep.unref();
+  return (req: Request, res: Response, next: NextFunction) => {
+    const k = key(req);
+    const now = Date.now();
+    let entry = hits.get(k);
+    if (!entry || now - entry.windowStart > windowMs) {
+      entry = { count: 0, windowStart: now };
+      hits.set(k, entry);
+    }
+    if (entry.count >= max) {
+      res.status(429).json({ error: message });
       return;
     }
-    entry.count += 1;
-    if (entry.count > maxPerMinute) {
-      res.status(429).json({ error: 'Too many attempts — wait a minute and try again' });
-      return;
+    if (judged) {
+      const e = entry;
+      res.on('finish', () => {
+        if (res.statusCode !== 429 && judged(res.statusCode)) e.count += 1;
+      });
+    } else {
+      entry.count += 1;
     }
     next();
   };
+}
+
+/** Sign-in and PIN checks: wrong guesses per visitor per minute. */
+export function loginRateLimiter(maxFailuresPerMinute = 20) {
+  return rateLimiter({ max: maxFailuresPerMinute, failuresOnly: true });
 }

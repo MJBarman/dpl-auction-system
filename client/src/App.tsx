@@ -8,6 +8,7 @@ import Landing from './pages/Landing';
 import PhotoPage from './pages/PhotoPage';
 import ScreenPage from './pages/ScreenPage';
 import TeamPage from './pages/TeamPage';
+import WatchPage from './pages/WatchPage';
 
 export default function App() {
   const connect = useApp((s) => s.connect);
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/team" element={<TeamPage />} />
         <Route path="/screen" element={<ScreenPage />} />
+        <Route path="/watch" element={<WatchPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ToastProvider>

@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { dtc3State } from './dtc3.fixture';
 import * as engine from './engine';
 import { applyDataMigrations, buildInitialState, factoryResetPreview } from './seed';
 import { State } from './types';
 
+/** The engine tests run on the DTC 3 pool (dtc3.fixture.ts): its four
+ *  categories are what exercise the purse guardrail. The DCT seed has its own
+ *  tests just below. */
 function fresh(): State {
-  return buildInitialState();
+  return dtc3State();
 }
 
 function live(): State {
@@ -24,190 +28,137 @@ function playerByName(s: State, name: string) {
   return p!;
 }
 
-// ---- DTC 3 seed (DTC3_Player_Categories.pdf) ----------------------------------
-
-test('DTC 3 pool: 24 players — 2 Diamond, 4 Gold, 12 Emerald, 6 New', () => {
-  const s = fresh();
-  assert.equal(s.players.length, 24);
-  const count = (key: string) => s.players.filter((p) => p.tierKey === key).length;
-  assert.deepEqual(
-    { diamond: count('diamond'), gold: count('gold'), emerald: count('emerald'), new: count('new') },
-    { diamond: 2, gold: 4, emerald: 12, new: 6 },
-  );
-  assert.equal(new Set(s.players.map((p) => p.name)).size, 24, 'player names are unique');
-  assert.equal(new Set(s.players.map((p) => p.id)).size, 24, 'player ids are unique');
-});
-
-test('DTC 3 teams: Power Rangers (owner Angshumaan, capt. Ashish) and Underdogs (owner Ankur, capt. Saurav); captains are not in the pool', () => {
-  const s = fresh();
-  assert.deepEqual(
-    s.teams.map((t) => [t.id, t.name, t.owner, t.captain]),
-    [['t1', 'Power Rangers', 'Angshumaan', 'Ashish'], ['t2', 'Underdogs', 'Ankur', 'Saurav']],
-  );
-  for (const t of s.teams) assert.ok(!s.players.some((p) => p.name === t.captain), `${t.captain} is not for sale`);
-});
-
-test('DTC 3 tiers follow the combined MVP points, highest first', () => {
-  const s = fresh();
-  const ranked = s.players.filter((p) => p.tierKey !== 'new');
-  assert.equal(ranked.length, 18);
-  // Seeded in overall-rank order: totals strictly fall from #1 Hirak to #18 Vishal.
-  for (let i = 1; i < ranked.length; i++) {
-    assert.ok(ranked[i - 1].stats.mvpTotal! > ranked[i].stats.mvpTotal!, `${ranked[i - 1].name} outranks ${ranked[i].name}`);
-  }
-  // Tier lines sit at the big drops: 25.2 → 19.3 (Diamond → Gold), 15.3 → 8.1 (Gold → Emerald).
-  for (const p of ranked) {
-    const mvp = p.stats.mvpTotal!;
-    assert.equal(p.tierKey, mvp >= 25 ? 'diamond' : mvp >= 15 ? 'gold' : 'emerald', `${p.name} (${mvp} MVP pts)`);
-  }
-  // New players have no DTC 1 or DTC 2 record at all.
-  for (const p of s.players.filter((x) => x.tierKey === 'new')) assert.deepEqual(p.stats, {});
-});
-
-test('DTC 3 stats: every MVP total matches its DTC 1 + DTC 2 split (to CricHeroes rounding)', () => {
-  const s = fresh();
-  for (const p of s.players.filter((x) => x.tierKey !== 'new')) {
-    const { mvpTotal, mvpS1, mvpS2 } = p.stats;
-    assert.ok(mvpS1 != null || mvpS2 != null, `${p.name} has a season split`);
-    const sum = (mvpS1 ?? 0) + (mvpS2 ?? 0);
-    assert.ok(Math.abs(sum - mvpTotal!) <= 0.011, `${p.name}: ${mvpS1} + ${mvpS2} vs total ${mvpTotal}`);
-  }
-});
-
-test('DTC 3 stats: batting and bowling lines are internally consistent', () => {
-  const s = fresh();
-  for (const p of s.players) {
-    const { runs, balls, hs, batAvg, wkts, bestWkts, econ } = p.stats;
-    if (hs != null) {
-      assert.match(hs, /^\d+\*?$/, `${p.name} HS`);
-      assert.ok(parseInt(hs, 10) <= runs!, `${p.name}: HS ${hs} within ${runs} runs`);
-      assert.ok(balls != null, `${p.name} batted, so balls faced are known`);
-    }
-    if (batAvg != null) {
-      // runs ÷ average = dismissals, a whole number (averages are printed to 2 dp).
-      const outs = runs! / batAvg;
-      assert.ok(Math.abs(outs - Math.round(outs)) < 0.01, `${p.name}: ${runs} runs at ${batAvg}`);
-    }
-    if (bestWkts != null) assert.ok(bestWkts <= wkts!, `${p.name}: best ${bestWkts} of ${wkts} wkts`);
-    if (wkts != null) assert.ok(econ != null, `${p.name} bowled, so economy is known`);
-  }
-});
-
-test('DTC 3 stats: every season MVP score carries its #rank from the PDF, and only those do', () => {
-  const s = fresh();
-  for (const p of s.players) {
-    const { mvpS1, mvpS2, mvpRankS1, mvpRankS2 } = p.stats;
-    assert.equal(mvpRankS1 != null, mvpS1 != null, `${p.name}: DTC 1 rank iff DTC 1 score`);
-    assert.equal(mvpRankS2 != null, mvpS2 != null, `${p.name}: DTC 2 rank iff DTC 2 score`);
-  }
-  const ranks = (name: string) => {
-    const st = playerByName(s, name).stats;
-    return [st.mvpRankS1 ?? null, st.mvpRankS2 ?? null];
+/** A seeded random auction to the end: jump bids up to each team's max and
+ *  walk-aways, then accelerated passes and allotment. Throws if it gets stuck. */
+function randomAuction(s: State, seed: number): void {
+  let x = seed;
+  const rnd = () => {
+    x = (x * 1103515245 + 12345) % 2147483648;
+    return x / 2147483648;
   };
-  assert.deepEqual(ranks('Hirak'), [2, 1]);
-  assert.deepEqual(ranks('Padum'), [6, 2]);
-  assert.deepEqual(ranks('Chandan'), [19, 10]);
-  assert.deepEqual(ranks('Madhurjya'), [null, 13]);
-  assert.deepEqual(ranks('Chinmoy Jr'), [15, null]);
-  assert.deepEqual(ranks('Vishal'), [20, 24]);
-  // Within one season, a higher MVP score never ranks lower.
-  for (const [score, rank] of [['mvpS1', 'mvpRankS1'], ['mvpS2', 'mvpRankS2']] as const) {
-    const played = s.players.filter((p) => p.stats[score] != null);
-    for (const a of played) {
-      for (const b of played) {
-        if (a.stats[score]! > b.stats[score]!) assert.ok(a.stats[rank]! < b.stats[rank]!, `${a.name} above ${b.name} in ${score}`);
-      }
+  let now = 1;
+  const runLot = (playerId: string) => {
+    open(s, playerId);
+    for (let g = 0; g < 200; g++) {
+      const leader = s.lot!.bids.at(-1)?.teamId;
+      const t = leader === 't1' ? 't2' : leader === 't2' ? 't1' : rnd() < 0.5 ? 't1' : 't2';
+      if (rnd() < 0.25) break;
+      const sum = engine.teamSummary(s, t);
+      const min = engine.nextMinBid(s);
+      if (sum.full || min > sum.maxBid) break;
+      engine.placeBid(s, t, Math.round(min + (sum.maxBid - min) * rnd() ** 3), 'team', now++);
+    }
+    if (s.lot!.bids.length) engine.sellLot(s, now++);
+    else engine.passLot(s, undefined, now++);
+    if (s.timeout) engine.resumeAuction(s);
+  };
+  engine.startAuction(s);
+  for (let p = engine.drawNext(s); p; p = engine.drawNext(s)) runLot(p.id);
+  for (let pass = 0; pass < 2 && engine.unsoldCount(s) > 0; pass++) {
+    engine.startAccelerated(s);
+    for (let p = engine.drawNext(s); p; p = engine.drawNext(s)) runLot(p.id);
+  }
+  if (engine.unsoldCount(s) > 0) engine.allotUnsold(s);
+  engine.completeAuction(s); // throws if anyone is short or unsold
+}
+
+// ---- DCT seed: the organiser's list of 22 ---------------------------------------
+
+test('DCT pool: the organiser\'s 22 players, in their order and spelling', () => {
+  const s = buildInitialState();
+  assert.deepEqual(s.players.map((p) => p.name), [
+    'Jishnu', 'Manash', 'Madhurjya', 'Kaustav', 'Kabya', 'Rohan', 'Ashish', 'Saurabh',
+    'Angshu', 'Uddhab', 'Binit', 'Amit', 'Asif', 'Chinmoy Sr', 'Ronny', 'Debanga',
+    'Chinmoy Jr', 'Hirak Jr', 'Rahul', 'Amlan', 'Sonu', 'Bhokto',
+  ]);
+  assert.ok(s.players.every((p, i) => p.id === `dct-p${i + 1}`), 'dct- ids keep photo folders apart from DPL and DTC 3');
+  assert.equal(new Set(s.players.map((p) => p.photoCode)).size, 22, 'every player has their own photo code');
+  assert.ok(s.players.every((p) => !/pay|\*|\(/i.test(p.name)), 'no "to pay" notes or stars in the names');
+});
+
+test('DCT players start uncategorised (drawn last, base 200), with no stats, roles, hot list or photos', () => {
+  const s = buildInitialState();
+  for (const p of s.players) {
+    assert.equal(p.tierKey, 'uncategorised', p.name);
+    assert.deepEqual(p.stats, {}, p.name);
+    assert.equal(p.role, '', p.name);
+    assert.equal(p.demandRank, null, `${p.name} is not on a hot list`);
+    assert.equal(p.sleeper, false, p.name);
+    assert.equal(p.photoPath, null, p.name);
+    assert.equal(p.status, 'available', p.name);
+    assert.equal(engine.basePriceOf(s, p), 200, p.name);
+  }
+  const tiers = [...s.settings.tiers].sort((a, b) => a.order - b.order);
+  assert.deepEqual(tiers.map((t) => [t.key, t.basePrice]), [
+    ['diamond', 1000], ['gold', 600], ['emerald', 400], ['new', 200], ['uncategorised', 200],
+  ]);
+});
+
+test('DCT teams: two teams whose names and captains come later', () => {
+  const s = buildInitialState();
+  assert.deepEqual(s.teams.map((t) => [t.id, t.name, t.captain, t.owner]), [['t1', 'Team 1', '', ''], ['t2', 'Team 2', '', '']]);
+  assert.notEqual(s.teams[0].code, s.teams[1].code);
+});
+
+test('DCT settings: 11 a side (10 bought + the captain) from a 30,000 purse', () => {
+  const s = buildInitialState();
+  assert.equal(s.settings.auctionName, 'DCT Player Auction');
+  assert.equal(s.settings.purse, 30000);
+  assert.equal(s.settings.minSquad, 10);
+  assert.equal(s.settings.maxSquad, 10);
+  assert.equal(s.settings.reservePerSlot, 0, 'the max bid keeps back the base prices still to come');
+  assert.equal(s.settings.bidderBidding, true);
+  for (const t of s.teams) assert.equal(engine.teamSummary(s, t.id).remaining, 30000);
+});
+
+test('DCT: until the two captains leave the pool, the console warns that 2 players cannot be sold', () => {
+  const s = buildInitialState();
+  assert.deepEqual(engine.feasibilityWarnings(s), [
+    'Pool has 22 players but 2 teams × max 10 caps at 20. 2 player(s) cannot be sold — take any captains out of the pool, trim it, or raise the maximum squad.',
+  ]);
+  s.players = s.players.filter((p) => p.name !== 'Rohan' && p.name !== 'Amit'); // any two names
+  assert.deepEqual(engine.feasibilityWarnings(s), [], '20 players for two squads of 10');
+});
+
+test('DCT: while everyone is uncategorised, a fresh team can bid 30,000 − 9 × 200 = 28,200', () => {
+  const s = buildInitialState();
+  s.players = s.players.slice(0, 20);
+  engine.startAuction(s);
+  for (const t of s.teams) assert.equal(engine.teamSummary(s, t.id).maxBid, 28200);
+  open(s, s.players[0].id);
+  assert.equal(engine.nextMinBid(s), 200);
+  assert.equal(engine.checkBid(s, 't1', 28200).ok, true);
+  assert.equal(engine.checkBid(s, 't1', 28300).ok, false);
+});
+
+test('DCT: random auctions of the 20 always finish with two squads of 10, categorised or not', () => {
+  for (let run = 0; run < 60; run++) {
+    const s = buildInitialState();
+    s.players = s.players.slice(0, 20);
+    if (run % 2) {
+      // Categorised the way an organiser might: 2 Diamond, 4 Gold, 8 Emerald, 6 New.
+      const keys = ['diamond', 'diamond', 'gold', 'gold', 'gold', 'gold', ...Array(8).fill('emerald'), ...Array(6).fill('new')];
+      s.players.forEach((p, i) => { p.tierKey = keys[i]; });
+    }
+    randomAuction(s, 1000 + run);
+    for (const t of s.teams) {
+      const sum = engine.teamSummary(s, t.id);
+      assert.equal(sum.count, 10, `run ${run}: ${t.name} has 10`);
+      assert.ok(sum.remaining >= 0, `run ${run}: ${t.name} overspent`);
     }
   }
 });
 
-test('DTC 3 hot list: the top 8 of the overall MVP ranking, in order', () => {
-  const s = fresh();
-  const hot = s.players.filter((p) => p.demandRank != null).sort((a, b) => a.demandRank! - b.demandRank!);
-  assert.deepEqual(hot.map((p) => p.name), ['Hirak', 'Padum', 'Asif', 'Kaustav', 'Uddhab', 'Bhokto', 'Kabya', 'Jishnu']);
-  assert.deepEqual(hot.map((p) => p.demandRank), [1, 2, 3, 4, 5, 6, 7, 8]);
-  const byMvp = [...s.players].sort((a, b) => (b.stats.mvpTotal ?? -1) - (a.stats.mvpTotal ?? -1)).slice(0, 8);
-  assert.deepEqual(byMvp.map((p) => p.name), hot.map((p) => p.name));
-  assert.ok(s.players.every((p) => !p.sleeper), 'no sleepers — the PDF names none');
-});
-
-test('data migrations top up the live database (no ranks, no hot list, reserve 400) — once', () => {
-  const s = fresh();
-  // Shape of the live database: no ranks, no hot list, the old 400 reserve,
-  // no migrations record.
-  delete s.migrations;
-  s.settings.reservePerSlot = 400;
-  for (const p of s.players) {
-    delete p.stats.mvpRankS1;
-    delete p.stats.mvpRankS2;
-    p.demandRank = null;
-  }
-  // A roster edit made since then must survive: Deep's slot now holds someone else.
-  const deep = playerByName(s, 'Deep');
-  deep.name = 'Somebody Else';
-  assert.equal(applyDataMigrations(s), true);
-  assert.equal(s.settings.reservePerSlot, 0, 'the max bid now follows the base prices still to come');
-  const want = fresh();
-  for (const p of s.players) {
-    if (p.id === deep.id) {
-      assert.equal(p.stats.mvpRankS1, undefined, 'a renamed player is left alone');
-      continue;
-    }
-    const w = want.players.find((x) => x.id === p.id)!;
-    assert.deepEqual(p.stats, w.stats, `${p.name} stats restored`);
-    assert.equal(p.demandRank, w.demandRank, `${p.name} hot-list rank`);
-  }
-  // Applied once: clearing the hot list or going back to 400 afterwards sticks.
-  for (const p of s.players) p.demandRank = null;
-  s.settings.reservePerSlot = 400;
-  assert.equal(applyDataMigrations(s), false);
-  assert.ok(s.players.every((p) => p.demandRank === null));
-  assert.equal(s.settings.reservePerSlot, 400);
-  // A fresh seed needs no top-up.
-  assert.equal(applyDataMigrations(fresh()), false);
-});
-
-test('data migrations keep a hot list the auctioneer already set', () => {
-  const s = fresh();
-  delete s.migrations;
-  for (const p of s.players) p.demandRank = null;
-  playerByName(s, 'Madhurjya').demandRank = 1;
-  applyDataMigrations(s);
-  assert.deepEqual(s.players.filter((p) => p.demandRank != null).map((p) => p.name), ['Madhurjya']);
-});
-
-test('the reserve moves to base prices (0) only from an untouched 400, with the 30,000 purse', () => {
-  const run = (purse: number, reservePerSlot: number, migrations: string[] = []) => {
-    const s = fresh();
-    s.migrations = migrations;
-    Object.assign(s.settings, { purse, reservePerSlot });
-    applyDataMigrations(s);
-    return s.settings.reservePerSlot;
-  };
-  assert.equal(run(30000, 400), 0, 'the live site today');
-  assert.equal(run(30000, 1000, ['dtc3-reserve-1000']), 0, 'a test copy the never-deployed 1,000 step had touched');
-  assert.equal(run(30000, 1000), 1000, 'a 1,000 the auctioneer chose is kept');
-  assert.equal(run(30000, 600), 600, 'a reserve the auctioneer chose is kept');
-  assert.equal(run(10000, 400), 400, 'not the old 10,000-purse setup');
-});
-
-test('the step above 3,000 drops from +500 to +250 only on the untouched ladder, before the auction starts', () => {
-  const run = (ladder: { upTo: number | null; step: number }[], stage: 'setup' | 'live' = 'setup') => {
-    const s = fresh();
-    s.migrations = s.migrations!.filter((id) => id !== 'dtc3-step-250-above-3000');
-    s.settings.increments = ladder;
-    s.stage = stage;
-    applyDataMigrations(s);
-    return s.settings.increments.map((r) => r.step);
-  };
-  const old = () => [{ upTo: 1000, step: 100 }, { upTo: 3000, step: 200 }, { upTo: null, step: 500 }];
-  assert.deepEqual(run(old()), [100, 200, 250], 'the live site today');
-  assert.deepEqual(run(old(), 'live'), [100, 200, 500], 'never mid-auction');
-  assert.deepEqual(run([{ upTo: 1000, step: 100 }, { upTo: null, step: 500 }]), [100, 500], 'an edited ladder is kept');
+test('no data migrations are pending on a fresh DCT seed, and a DTC 3 database\'s records are left alone', () => {
+  assert.equal(applyDataMigrations(buildInitialState()), false);
+  const old = dtc3State();
+  old.migrations = ['dtc3-season-ranks-hot-list', 'dtc3-team-owners'];
+  assert.equal(applyDataMigrations(old), false);
+  assert.deepEqual(old.migrations, ['dtc3-season-ranks-hot-list', 'dtc3-team-owners']);
 });
 
 test('factory-reset preview: a fresh seed loses nothing beyond the codes', () => {
-  const p = factoryResetPreview(fresh());
+  const p = factoryResetPreview(buildInitialState());
   assert.deepEqual(p, {
     stage: 'setup', sold: 0, unsold: 0, watchlistEntries: 0,
     photosUnlinked: [], playersAdded: [], playersRemoved: [], playersEdited: [], teamsChanged: [], settingsChanged: [],
@@ -215,71 +166,32 @@ test('factory-reset preview: a fresh seed loses nothing beyond the codes', () =>
 });
 
 test('factory-reset preview lists every result, upload, edit and setting the reset throws away', () => {
-  const s = fresh();
+  const s = buildInitialState();
   s.stage = 'live';
-  Object.assign(playerByName(s, 'Hirak'), { status: 'sold', teamId: 't1', price: 4000 });
-  playerByName(s, 'Deep').status = 'unsold';
-  playerByName(s, 'Padum').photoPath = 'players/dtc3-p2/123.jpg'; // uploaded after the seed (the seed has none)
-  playerByName(s, 'Udit').role = 'Batter';
-  s.players = s.players.filter((p) => p.name !== 'Yatrick');
-  s.players.push({ ...playerByName(s, 'Ronny'), id: 'p-new', name: 'Guest' });
-  s.teams[1].owner = 'Someone';
+  Object.assign(playerByName(s, 'Jishnu'), { status: 'sold', teamId: 't1', price: 4000 });
+  playerByName(s, 'Rahul').status = 'unsold';
+  playerByName(s, 'Kaustav').photoPath = 'players/dct-p4/123.jpg'; // uploaded after the seed
+  playerByName(s, 'Asif').tierKey = 'gold'; // categorised
+  s.players = s.players.filter((p) => p.name !== 'Rohan'); // named captain, out of the pool
+  s.players.push({ ...playerByName(s, 'Amit'), id: 'p-new', name: 'Guest' });
+  Object.assign(s.teams[1], { name: 'Underdogs', captain: 'Rohan' });
   s.settings.purse = 25000;
   s.settings.increments[2].step = 500;
-  s.watchlists = { t1: { 'dtc3-p1': { starred: true, targetPrice: 5000, note: '' } as any } };
+  s.watchlists = { t1: { 'dct-p1': { playerId: 'dct-p1', starred: true, targetPrice: 5000, note: '' } } };
   const p = factoryResetPreview(s);
   assert.equal(p.stage, 'live');
   assert.equal(p.sold, 1);
   assert.equal(p.unsold, 1);
-  assert.deepEqual(p.photosUnlinked, ['Padum']);
-  assert.deepEqual(p.playersEdited, ['Udit']);
-  assert.deepEqual(p.playersRemoved, ['Yatrick']);
+  assert.deepEqual(p.photosUnlinked, ['Kaustav']);
+  assert.deepEqual(p.playersEdited, ['Asif']);
+  assert.deepEqual(p.playersRemoved, ['Rohan']);
   assert.deepEqual(p.playersAdded, ['Guest']);
-  assert.deepEqual(p.teamsChanged, ['Underdogs goes back to Underdogs (owner Ankur, capt. Saurav)']);
+  assert.deepEqual(p.teamsChanged, ['Underdogs goes back to Team 2']);
   assert.deepEqual(p.settingsChanged, [
     'Purse per team: 25,000 → 30,000',
     'Bid increments: +100 to 1,000 · +200 to 3,000 · +500 above → +100 to 1,000 · +200 to 3,000 · +250 above',
   ]);
   assert.equal(p.watchlistEntries, 1);
-});
-
-test('data migrations add the team owners to the live teams, once, leaving edited teams alone', () => {
-  const s = fresh();
-  s.migrations = s.migrations!.filter((id) => id !== 'dtc3-team-owners');
-  for (const t of s.teams) delete t.owner; // the live teams predate the owner field
-  s.teams[1].name = 'Renamed';
-  assert.equal(applyDataMigrations(s), true);
-  assert.deepEqual(s.teams.map((t) => t.owner), ['Angshumaan', undefined]);
-  // An owner typed in afterwards is never overwritten.
-  s.teams[0].owner = 'Someone';
-  s.migrations = s.migrations!.filter((id) => id !== 'dtc3-team-owners');
-  applyDataMigrations(s);
-  assert.equal(s.teams[0].owner, 'Someone');
-});
-
-test('DTC 3 settings: squads of exactly 12 clear the pool with no feasibility warnings', () => {
-  const s = fresh();
-  assert.equal(s.settings.minSquad, 12);
-  assert.equal(s.settings.maxSquad, 12);
-  assert.equal(s.teams.length * s.settings.maxSquad, s.players.length);
-  assert.deepEqual(engine.feasibilityWarnings(s), []);
-  // The DPL squads (7–8) could never clear this pool: 2 × 8 = 16 < 24.
-  s.settings.minSquad = 7;
-  s.settings.maxSquad = 8;
-  assert.ok(engine.feasibilityWarnings(s).some((w) => w.includes('8 player(s) cannot be sold')));
-});
-
-test('DTC 3 reuses the DPL photos of the 14 returning players that still have one — one photo each', () => {
-  const s = fresh();
-  const withPhoto = s.players.filter((p) => p.photoPath);
-  assert.deepEqual(withPhoto.map((p) => p.name).sort(), [
-    'Amlan', 'Asif', 'Bhokto', 'Bineet', 'Chinmoy Sr', 'Dharmendra', 'Hirak',
-    'Jishnu', 'Kabya', 'Madhurjya', 'Sonu', 'Uddhab', 'Vishal', 'Yatrick',
-  ]);
-  assert.equal(playerByName(s, 'Chinmoy Sr').photoPath, 'players/p2/1783693432535.jpg'); // DPL "Chinmoy Deka"
-  // A new upload deletes the replaced object, so a shared photo would vanish for the other player.
-  assert.equal(new Set(withPhoto.map((p) => p.photoPath)).size, withPhoto.length, 'no two players share a photo');
-  for (const p of withPhoto) assert.match(p.photoPath!, /^players\/p\d+\/\d+\.(jpg|png|webp)$/, p.name);
 });
 
 // ---- increment ladder -------------------------------------------------------

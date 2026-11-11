@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { LotView, PlayerStats, PlayerView, StateView, TeamView, Tier } from './types';
+import { serverNow } from './clock';
 import { Icon } from './icons';
 import { playBidSound, playDrawSound, playSoldSound, unlockAudio } from './sound';
 import { useTheme } from './theme';
@@ -141,12 +142,13 @@ export function auctionRules(state: StateView): string[] {
   const reserve = fmt(s.reservePerSlot);
   const fresh = fmt(freshMaxBid(state));
   const squad = s.minSquad === s.maxSquad ? `exactly ${s.minSquad}` : `${s.minSquad}–${s.maxSquad}`;
+  const side = s.minSquad === s.maxSquad ? ` — ${s.minSquad + 1} a side with the captain` : ', plus the captain';
   const tiers = [...s.tiers].sort((a, b) => a.order - b.order);
   const order = tiers.map((t) => t.name).join(' → ');
   const prices = tiers.map((t) => `${t.name} ${fmt(t.basePrice)}`).join(' · ');
   const steps = s.increments.map((r) => `+${fmt(r.step)}${r.upTo !== null ? ` up to ${fmt(r.upTo)}` : ' above'}`).join(' · ');
   return [
-    `Each team has ${fmt(s.purse)} points to buy ${squad} players. Captains are not in the pool.`,
+    `Each team has ${fmt(s.purse)} points to buy ${squad} players${side}, who is not in the pool.`,
     flatReserve(state)
       ? `Keep ${reserve} for every player you still need: max bid = points left − ${reserve} × players you still need after this one. So no first buy can go over ${fresh}.`
       : `For every player you still need after this one, keep back the base price of one of the most expensive players still left (${prices})${s.reservePerSlot > 0 ? `, and never less than ${reserve}` : ''}. Max bid = points left − that. Your first buy can go up to ${fresh}, and you get more room as the expensive players are sold.`,
@@ -183,11 +185,21 @@ export function TierBadge({ state, tierKey }: { state: StateView; tierKey: strin
   );
 }
 
-/** A player's full DTC record — MVP, batting and bowling rows. Pass the whole
+/** Whether any player in the pool has a record at all. A pool without one
+ *  (the DCT list has no stats yet) shows no record areas instead of a "no
+ *  record" line on every player. */
+export function poolHasRecords(players: PlayerView[]): boolean {
+  return players.some((p) => statGroups(p.stats) !== null);
+}
+
+/** A player's full record — MVP, batting and bowling rows. Pass the whole
  *  pool to show where the player sits in the overall ranking too. */
 export function StatsGrid({ player, players, compact }: { player: PlayerView; players?: PlayerView[]; compact?: boolean }) {
   const groups = statGroups(player.stats, players ? overallRank(players, player) : null);
-  if (!groups) return <div className="muted small">No DTC 1 or DTC 2 record — first DTC season.</div>;
+  if (!groups) {
+    if (players && !poolHasRecords(players)) return null;
+    return <div className="muted small">No match record on file.</div>;
+  }
   return (
     <div className={`stat-groups${compact ? ' compact' : ''}`}>
       {groups.map((g) => (
@@ -256,12 +268,9 @@ export function PlayerBadges({ player }: { player: PlayerView }) {
   );
 }
 
-export function useCountdown(endsAt: number | null, serverTime: number): number | null {
-  // Correct for client/server clock skew using the last state's serverTime.
-  const skewRef = useRef(0);
-  useEffect(() => {
-    skewRef.current = Date.now() - serverTime;
-  }, [serverTime]);
+export function useCountdown(endsAt: number | null, _serverTime?: number): number | null {
+  // Counted on the server's clock (clock.ts), so a phone whose own clock is
+  // off, or a countdown that appears seconds after the last update, is right.
   const [left, setLeft] = useState<number | null>(null);
   useEffect(() => {
     if (!endsAt) {
@@ -269,7 +278,7 @@ export function useCountdown(endsAt: number | null, serverTime: number): number 
       return;
     }
     const tick = () => {
-      const remaining = Math.max(0, endsAt - (Date.now() - skewRef.current));
+      const remaining = Math.max(0, endsAt - serverNow());
       setLeft(Math.ceil(remaining / 1000));
     };
     tick();
@@ -277,6 +286,18 @@ export function useCountdown(endsAt: number | null, serverTime: number): number 
     return () => clearInterval(id);
   }, [endsAt]);
   return left;
+}
+
+/** The server's clock, ticking: Date.now() corrected by the skew measured from
+ *  the last state's serverTime, re-rendering every `everyMs`. For deadlines
+ *  measured in minutes and hours (photo links), not the hammer timer. */
+export function useServerNow(_serverTime?: number, everyMs = 15_000): number {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), everyMs);
+    return () => clearInterval(id);
+  }, [everyMs]);
+  return serverNow();
 }
 
 /** Display length of the strategic-timeout countdown. Cosmetic only — the break
@@ -300,12 +321,14 @@ export function formatClock(totalSecs: number): string {
 export const CONSOLE_BID_MUTE_KEY = 'dpl.bidSound.muted';
 export const SCREEN_BID_MUTE_KEY = 'dpl.bidSound.muted.screen';
 export const TEAM_BID_MUTE_KEY = 'dpl.bidSound.muted.team';
+export const WATCH_BID_MUTE_KEY = 'dpl.bidSound.muted.watch';
 
-function loadMuted(key: string): boolean {
+function loadMuted(key: string, fallback: boolean): boolean {
   try {
-    return localStorage.getItem(key) === '1';
+    const saved = localStorage.getItem(key);
+    return saved === null ? fallback : saved === '1';
   } catch {
-    return false; // private mode / storage disabled — default to audible
+    return fallback; // private mode / storage disabled
   }
 }
 
@@ -323,12 +346,18 @@ function loadMuted(key: string): boolean {
 export function useBidSound(
   lot: LotView | null,
   storageKey: string = CONSOLE_BID_MUTE_KEY,
+  startMuted = false, // a spectator's phone starts silent until they turn sound on
 ): { muted: boolean; toggleMuted: () => void } {
-  const [muted, setMuted] = useState<boolean>(() => loadMuted(storageKey));
+  const [muted, setMuted] = useState<boolean>(() => loadMuted(storageKey, startMuted));
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
   useEffect(() => {
+    // A muted screen leaves audio alone: unlocking it on an iPhone takes over
+    // the phone's audio (it can stop the music someone is playing), and a
+    // spectator's page starts muted. Turning sound on is itself a tap, and
+    // that tap does the unlocking (see toggleMuted).
+    if (muted) return;
     // Try immediately — if the document already has (sticky) user activation,
     // e.g. the operator clicked through to the big screen, this unlocks the
     // context up front so the very first bid can sound. Otherwise the listeners
@@ -343,7 +372,7 @@ export function useBidSound(
     return () => {
       for (const e of events) window.removeEventListener(e, unlock);
     };
-  }, []);
+  }, [muted]);
 
   const lotId = lot?.id ?? null;
   const count = lot?.bids.length ?? 0;
@@ -356,15 +385,14 @@ export function useBidSound(
   }, [lotId, count]);
 
   const toggleMuted = useCallback(() => {
-    setMuted((m) => {
-      const next = !m;
-      try {
-        localStorage.setItem(storageKey, next ? '1' : '0');
-      } catch {
-        /* ignore — preference just won't persist */
-      }
-      return next;
-    });
+    const next = !mutedRef.current;
+    if (!next) unlockAudio(); // inside the tap that turned sound on
+    try {
+      localStorage.setItem(storageKey, next ? '1' : '0');
+    } catch {
+      /* ignore — preference just won't persist */
+    }
+    setMuted(next);
   }, [storageKey]);
 
   return { muted, toggleMuted };
@@ -529,14 +557,15 @@ export function useAction() {
   );
 }
 
-export function Modal({ title, onClose, children }: {
+export function Modal({ title, onClose, children, wide = false }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  wide?: boolean; // lists that need the room (photo links)
 }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal${wide ? ' wide' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
           <button className="btn ghost" onClick={onClose} aria-label="Close"><Icon name="close" /></button>

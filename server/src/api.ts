@@ -1,15 +1,22 @@
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
 import { Store } from './db';
+import { createHash } from 'node:crypto';
+import { AlreadyGuessed, audienceDevice, audienceTag, cleanName } from './audience';
 import {
-  deviceTagOf, loginRateLimiter, newToken, requireAdmin, requireTeam, safeEqual,
+  deviceTagOf, loginRateLimiter, newToken, rateLimiter, requireAdmin, requireTeam, safeEqual,
 } from './auth';
 import * as engine from './engine';
 import { AuctionError } from './engine';
 import {
-  PHOTO_MAX_BYTES, photosConfigured, photoUrlFor, removePhoto, sniffImage, uploadPhoto,
+  applyApprovedPhoto, closePhotoLink, hoursLabel, openPhotoLink, PHOTO_LINK_MAX_HOURS, photoDeviceTag,
+  photoLinkStatus, setPendingPhoto,
+} from './photoLinks';
+import {
+  approvedPathFor, jpegSize, movePhoto, newPhotoPath, PHOTO_MAX_BYTES, photosConfigured, photoUrlFor, removePhoto,
+  SniffedImage, sniffImage, uploadPhoto,
 } from './photos';
-import { buildInitialState, factoryResetPreview, generateCode } from './seed';
-import { statePayloadFor } from './views';
+import { buildInitialState, ensurePhotoCodes, ensureTimeoutFields, factoryResetPreview, generateCode } from './seed';
+import { publicState, statePayloadFor } from './views';
 import {
   IncrementRung, Player, PlayerStats, Settings, State, Tier,
 } from './types';
@@ -17,6 +24,8 @@ import {
 interface ApiDeps {
   store: Store;
   broadcast: () => void;
+  presenceChanged?: () => void; // the watching / guess counts moved
+  proxied?: boolean;            // behind a reverse proxy (a hosted deployment), not a laptop on the venue's Wi-Fi
   getPin: () => string;
   setPin: (pin: string) => void;
 }
@@ -84,6 +93,9 @@ function cleanSettings(body: unknown, current: Settings, state: State): Settings
   if (b.timeoutEvery !== undefined) next.timeoutEvery = int(b.timeoutEvery, 'Timeout frequency', { min: 0, max: 500 });
   if (b.showTier !== undefined) next.showTier = Boolean(b.showTier);
   if (b.rulesOnScreen !== undefined) next.rulesOnScreen = Boolean(b.rulesOnScreen);
+  if (b.audienceGame !== undefined) next.audienceGame = Boolean(b.audienceGame);
+  if (b.audienceReactions !== undefined) next.audienceReactions = Boolean(b.audienceReactions);
+  if (b.audienceNames !== undefined) next.audienceNames = Boolean(b.audienceNames);
 
   if (next.minSquad > next.maxSquad) throw new AuctionError('Minimum squad cannot exceed maximum squad');
 
@@ -136,7 +148,7 @@ function cleanSettings(body: unknown, current: Settings, state: State): Settings
 
 // ---- router ------------------------------------------------------------------
 
-export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router {
+export function createApi({ store, broadcast, getPin, setPin, presenceChanged = () => {}, proxied = false }: ApiDeps): Router {
   const router = Router();
 
   /** Run a mutation: optional undo snapshot, engine work, persist, log, broadcast.
@@ -164,7 +176,9 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
 
   // The wiping actions (auction reset, factory reset, restore) take the admin PIN
   // again even on a signed-in console; attempts are rate-limited like sign-in.
-  const pinAgainLimiter = loginRateLimiter(5);
+  // Only a wrong PIN (403) counts: a backup file refused after the PIN was
+  // accepted must not lock the organiser out.
+  const pinAgainLimiter = rateLimiter({ max: 5, failuresOnly: true, isFailure: (status) => status === 403 });
   function requirePinAgain(req: Request, action: string, refusal: string): void {
     const pin = typeof req.body?.pin === 'string' ? req.body.pin.trim() : '';
     if (!pin || !safeEqual(pin, getPin())) {
@@ -174,9 +188,20 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   }
 
   // ---- auth ----
-  router.post('/auth/admin', loginRateLimiter(), (req, res) => {
+  // Wrong admin PINs are limited per visitor (20 a minute) and across everyone
+  // (100 an hour): with enough addresses, per-visitor limits alone would let a
+  // 6-digit PIN be guessed within the hour. Signed-in consoles keep working
+  // while sign-in is paused.
+  const adminPinBudget = rateLimiter({
+    max: 100, windowMs: 3_600_000, key: () => 'everyone', failuresOnly: true,
+    message: 'Too many wrong PINs — admin sign-in is paused for a while. Consoles already signed in keep working.',
+  });
+  router.post('/auth/admin', loginRateLimiter(), adminPinBudget, (req, res) => {
     const pin = str(req.body?.pin, 'PIN', { max: 64 });
-    if (!safeEqual(pin, getPin())) throw new AuctionError('Wrong PIN', 401);
+    if (!safeEqual(pin, getPin())) {
+      store.logEvent('auth', 'Admin sign-in refused — wrong PIN');
+      throw new AuctionError('Wrong PIN', 401);
+    }
     const token = newToken();
     store.createSession({ token, role: 'admin', teamId: null, createdAt: Date.now() });
     store.logEvent('auth', `Auctioneer signed in (device #${deviceTagOf(token)})`);
@@ -207,6 +232,19 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ role: req.session.role, teamId: req.session.teamId ?? null });
   });
 
+  /** Sign out for real: the token stops working everywhere, not just on this screen. */
+  router.post('/auth/logout', (req, res) => {
+    const s = req.session;
+    if (s) {
+      store.deleteSession(s.token);
+      store.logEvent('auth', s.role === 'admin'
+        ? `Auctioneer signed out (device #${deviceTagOf(s.token)})`
+        : `${teamName(s.teamId)} signed out a device (#${deviceTagOf(s.token)})`);
+      if (s.role === 'team') broadcast(); // the Teams tab's device counts
+    }
+    res.json({ ok: true });
+  });
+
   // ---- state snapshot (role-aware) ----
   router.get('/state', (req, res) => {
     res.json(statePayloadFor(store, req.session));
@@ -214,8 +252,10 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
 
   // =========================================================================
   // Player photos — public endpoints behind a per-player secret link.
-  // The player opens /photo/<code> (distributed by the admin), uploads a
-  // photo, and can revisit the same link any time to replace it.
+  // The organiser opens a player's link for a set time and sends it to that
+  // player alone. A photo sent through it waits for the organiser's approval
+  // and only then reaches the screens; approving it closes the link. The
+  // rules live in photoLinks.ts.
   // =========================================================================
   const playerByPhotoCode = (code: unknown) =>
     typeof code === 'string' && code
@@ -229,9 +269,63 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     return code;
   };
 
+  const INVALID_PHOTO_LINK = 'This photo link is not valid — ask the organiser for a new one';
+
+  /** The player whose link this is, provided it takes uploads right now. A
+   *  refusal on a real link goes in the log with the phone that tried. */
+  const playerWithOpenLink = (code: unknown, device: string): Player => {
+    const player = playerByPhotoCode(code);
+    if (!player) throw new AuctionError(INVALID_PHOTO_LINK, 404);
+    const status = photoLinkStatus(store.state, player, Date.now());
+    if (status === 'open') return player;
+    store.logEvent('photo', `Refused a photo for ${player.name}: ${status === 'auction'
+      ? 'links are paused while the auction is on'
+      : 'the link is closed'} (phone #${device})`);
+    throw new AuctionError(status === 'auction'
+      ? 'Photo uploads are closed now that the auction has started'
+      : 'This photo link has expired — ask the organiser to send you a new one', 403);
+  };
+
+  /** The image in a raw upload body, identified from its bytes. */
+  const imageFrom = (body: unknown): { body: Buffer; kind: SniffedImage } => {
+    if (!photosConfigured()) throw new AuctionError('Photo uploads are not set up on the server yet — tell the organiser', 503);
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      throw new AuctionError('Send the image bytes as the request body (JPEG, PNG or WebP)', 415);
+    }
+    const kind = sniffImage(body);
+    if (!kind) throw new AuctionError('That file does not look like a JPEG, PNG or WebP image', 415);
+    return { body, kind };
+  };
+  const rawImage = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: PHOTO_MAX_BYTES });
+
+  /** A player's upload must be the still JPEG the photo page makes on a
+   *  canvas (at most 900 px a side). PNG and WebP can animate, so a photo that
+   *  looked fine at approval could turn into something else mid-auction; a
+   *  JPEG can't. The size cap also keeps huge decode bombs off the screens. */
+  const PLAYER_PHOTO_MAX_EDGE = 2400;
+  const stillJpegFrom = (raw: unknown): { body: Buffer; kind: SniffedImage } => {
+    const image = imageFrom(raw);
+    const size = image.kind.ext === 'jpg' ? jpegSize(image.body) : null;
+    if (!size) throw new AuctionError('Please send the photo from the upload page (it sends a JPEG)', 415);
+    if (size.width < 1 || size.height < 1 || size.width > PLAYER_PHOTO_MAX_EDGE || size.height > PLAYER_PHOTO_MAX_EDGE) {
+      throw new AuctionError('That image is too big — please send it from the upload page, which resizes it', 415);
+    }
+    return image;
+  };
+  // Uploads through a link: 10 a minute per link, and a cap per visitor.
+  const photoPerLink = rateLimiter({ max: 10, key: (req) => `link:${String(req.params.code).slice(0, 40)}` });
+  const photoPerVisitor = rateLimiter({ max: 60 });
+
+  // The pending photo being moved into place right now, per player: a second
+  // tap on Approve, or a Reject racing it, can't act on it twice, and an
+  // upload that replaces it meanwhile must not delete it from under the move.
+  const publishing = new Map<string, string>();
+
   router.get('/photo/:code', (req, res) => {
     const player = playerByPhotoCode(req.params.code);
-    if (!player) throw new AuctionError('This photo link is not valid — ask the organiser for a fresh one', 404);
+    if (!player) throw new AuctionError(INVALID_PHOTO_LINK, 404);
+    const now = Date.now();
+    const link = photoLinkStatus(store.state, player, now);
     res.json({
       name: player.name,
       role: player.role,
@@ -239,40 +333,99 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       photoUrl: photoUrlFor(player.photoPath),
       uploadsEnabled: photosConfigured(),
       maxBytes: PHOTO_MAX_BYTES,
+      link,
+      openUntil: link === 'open' ? player.photoLinkUntil : null,
+      pendingSince: player.pendingPhoto?.uploadedAt ?? null,
+      serverTime: now,
     });
   });
 
   router.post(
     '/photo/:code',
-    loginRateLimiter(10), // uploads are rare — throttle hard
-    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: PHOTO_MAX_BYTES }),
+    photoPerVisitor,
+    photoPerLink,
+    // Check the link before reading the body, so a closed link never takes the bytes.
+    (req, _res, next) => {
+      try {
+        playerWithOpenLink(req.params.code, photoDeviceTag(req));
+        next();
+      } catch (err) {
+        next(err);
+      }
+    },
+    rawImage,
     async (req, res, next) => {
       try {
-        const player = playerByPhotoCode(req.params.code);
-        if (!player) throw new AuctionError('This photo link is not valid — ask the organiser for a fresh one', 404);
-        if (!photosConfigured()) throw new AuctionError('Photo uploads are not set up on the server yet — tell the organiser', 503);
-        const body = req.body as unknown;
-        if (!Buffer.isBuffer(body) || body.length === 0) {
-          throw new AuctionError('Send the image bytes as the request body (JPEG, PNG or WebP)', 415);
-        }
-        const kind = sniffImage(body);
-        if (!kind) throw new AuctionError('That file does not look like a JPEG, PNG or WebP image', 415);
-        // Fresh path per upload → immutable public URL (cache-friendly during
-        // live bidding); replacing a photo swaps the path atomically below.
-        const objectPath = `players/${player.id}/${Date.now()}.${kind.ext}`;
+        const device = photoDeviceTag(req);
+        const player = playerWithOpenLink(req.params.code, device); // it may have closed while the body arrived
+        const { body, kind } = stillJpegFrom(req.body);
+        const objectPath = newPhotoPath('pending', player.id, kind.ext);
         await uploadPhoto(objectPath, body, kind.contentType);
-        let previous: string | null = null;
-        mutate(null, 'photo', () => {
-          previous = player.photoPath ?? null;
-          player.photoPath = objectPath;
-        }, () => `${player.name} updated their profile photo`);
-        if (previous && previous !== objectPath) removePhoto(previous);
-        res.json({ ok: true, photoUrl: photoUrlFor(objectPath) });
+        let current: Player;
+        try {
+          current = playerWithOpenLink(req.params.code, device); // ...or while it went to storage
+        } catch (err) {
+          removePhoto(objectPath);
+          throw err;
+        }
+        const replaced = mutate(null, 'photo',
+          () => setPendingPhoto(current, { path: objectPath, uploadedAt: Date.now(), device }),
+          (r) => `New photo for ${current.name} is waiting for approval — sent from phone #${device}${
+            r ? ' (it replaces the one that was waiting)' : ''}`);
+        if (replaced && publishing.get(current.id) !== replaced.path) removePhoto(replaced.path);
+        res.json({ ok: true, pending: true });
       } catch (err) {
         next(err);
       }
     },
   );
+
+  // =========================================================================
+  // The audience (phones watching): guess the hammer price. Reactions travel
+  // over the socket (sockets.ts). Rules in audience.ts.
+  // =========================================================================
+  // Limits, tightest first:
+  //  - one phone: 30 tries a minute, whatever comes of them;
+  //  - one network address: 240 ACCEPTED guesses a minute. Refused ones don't
+  //    count, so junk from one phone can't use up a whole venue's allowance
+  //    (a venue can sit behind one Wi-Fi address);
+  //  - one network address, one player: a handful when every phone has its own
+  //    address (a laptop on the venue's Wi-Fi), a hundred behind a proxy,
+  //    where the whole room may share one. A phone id is only a random string,
+  //    so this is what stops one person covering every price.
+  const perAddressPerLot = proxied ? 100 : 5;
+  const phoneLimiter = rateLimiter({ max: 30, key: (req) => `guess:${audienceDevice(req.get('x-device')) ?? req.ip}` });
+  const acceptedLimiter = rateLimiter({ max: 240, countWhen: (status) => status === 200, message: 'Too many guesses from this network — wait a minute' });
+  router.post('/audience/guess', phoneLimiter, acceptedLimiter, (req, res) => {
+    const device = audienceDevice(req.get('x-device'));
+    if (!device) throw new AuctionError('Open the watch page to play');
+    const tag = audienceTag(device);
+    const name = store.state.settings.audienceNames !== false ? cleanName(req.body?.name) : '';
+    const amount = int(req.body?.amount, 'Your guess', { min: 0 });
+    const lotId = str(req.body?.lotId, 'Lot', { max: 80 });
+    const address = req.ip ?? 'unknown';
+    try {
+      const out = store.audience.guess(store.state, tag, name, amount, lotId, Date.now(), { address, limit: perAddressPerLot });
+      // Ten from one address on one player is worth the organiser's eye: it
+      // may be a family on one hotspot, or one person guessing ten times.
+      if (out.fromAddress === 10) {
+        const lot = store.state.lot;
+        const who = lot ? engine.getPlayer(store.state, lot.playerId).name : 'a player';
+        const network = createHash('sha256').update(`network:${address}`).digest('hex').slice(0, 6);
+        store.logEvent('audience', `10 guesses on ${who} have come from one network (#${network}). If it looks like one person, Settings → Phones watching can hide names or stop the game.`);
+      }
+      presenceChanged();
+      res.json({ ok: true, amount: out.amount, closesAt: out.closesAt, tag });
+    } catch (err) {
+      // The phone has guessed already (its first answer may have been lost on
+      // the way back): say what it guessed, so it can show the guess as locked.
+      if (err instanceof AlreadyGuessed) {
+        res.status(409).json({ error: err.message, amount: err.amount, tag });
+        return;
+      }
+      throw err;
+    }
+  });
 
   // =========================================================================
   // Team (captain) endpoints
@@ -302,7 +455,10 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ ok: true });
   });
 
-  router.put('/team/watchlist/:playerId', requireTeam, (req, res) => {
+  // Each watchlist save writes the whole state and pushes it to every screen, so
+  // one device gets a generous cap (no real captain comes near 2 a second).
+  const watchlistLimiter = rateLimiter({ max: 120, key: (req) => `wl:${req.session?.token ?? req.ip}` });
+  router.put('/team/watchlist/:playerId', requireTeam, watchlistLimiter, (req, res) => {
     const teamId = req.session!.teamId!;
     const player = engine.getPlayer(store.state, req.params.playerId);
     const wl = (store.state.watchlists[teamId] ??= {});
@@ -410,15 +566,141 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       for (const wl of Object.values(store.state.watchlists)) delete wl[player.id];
     }, () => `Removed player ${player.name} from the pool`);
     if (player.photoPath) removePhoto(player.photoPath);
+    if (player.pendingPhoto) removePhoto(player.pendingPhoto.path);
     res.json({ ok: true });
   });
 
-  router.post('/admin/players/:id/regenerate-photo-code', requireAdmin, (req, res) => {
+  // ---- player photos: links, approvals and the organiser's own uploads ----
+  const linkHours = (v: unknown) => int(v, 'Hours', { min: 1, max: PHOTO_LINK_MAX_HOURS });
+
+  /** Open (or extend) one player's link; `newCode: true` also replaces the code. */
+  router.post('/admin/players/:id/photo-link', requireAdmin, (req, res) => {
     const player = engine.getPlayer(store.state, req.params.id);
-    mutate(null, 'roster', () => {
-      player.photoCode = newPhotoCode(); // the old link stops working immediately
-    }, () => `Regenerated the photo-upload link for ${player.name}`);
+    const hours = linkHours(req.body?.hours);
+    const link = mutate(null, 'photo',
+      () => openPhotoLink(store.state, player, Date.now(), hours, req.body?.newCode === true, newPhotoCode),
+      (r) => (r.codeChanged
+        ? `New photo link for ${player.name}, open for ${hoursLabel(hours)} — any older link for ${player.name} stops working`
+        : `${player.name}'s photo link now stays open for ${hoursLabel(hours)} from now (same link)`));
+    res.json({ ok: true, code: link.code, until: link.until });
+  });
+
+  router.post('/admin/players/:id/photo-link/close', requireAdmin, (req, res) => {
+    const player = engine.getPlayer(store.state, req.params.id);
+    mutate(null, 'photo', () => closePhotoLink(store.state, player, Date.now()),
+      () => `Closed ${player.name}'s photo link`);
     res.json({ ok: true });
+  });
+
+  router.post('/admin/photo-links/open', requireAdmin, (req, res) => {
+    const hours = linkHours(req.body?.hours);
+    const ids: unknown = req.body?.playerIds;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some((id) => typeof id !== 'string')) {
+      throw new AuctionError('Choose whose photo links to open');
+    }
+    const players = [...new Set(ids as string[])].map((id) => engine.getPlayer(store.state, id));
+    mutate(null, 'photo', () => {
+      const now = Date.now();
+      for (const p of players) openPhotoLink(store.state, p, now, hours, false, newPhotoCode);
+    }, () => `Opened photo links for ${hoursLabel(hours)}: ${players.map((p) => p.name).join(', ')}`);
+    res.json({ ok: true, opened: players.length });
+  });
+
+  router.post('/admin/photo-links/close', requireAdmin, (_req, res) => {
+    const closed = mutate(null, 'photo', () => {
+      const now = Date.now();
+      return store.state.players.filter((p) => closePhotoLink(store.state, p, now)).map((p) => p.name);
+    }, (names) => (names.length
+      ? `Closed every open photo link: ${names.join(', ')}`
+      : 'Closed every photo link (none was open)'));
+    res.json({ ok: true, closed: closed.length });
+  });
+
+  /** The pending photo goes on the screens; `path` must be the photo the
+   *  organiser looked at, so a newer upload is never approved unseen. */
+  router.post('/admin/players/:id/photo/approve', requireAdmin, async (req, res, next) => {
+    try {
+      const player = engine.getPlayer(store.state, req.params.id);
+      const path = str(req.body?.path, 'Photo', { max: 300 });
+      const pending = player.pendingPhoto;
+      if (!pending) throw new AuctionError(`${player.name} has no photo waiting for approval`, 409);
+      if (pending.path !== path) throw new AuctionError(`${player.name} sent a newer photo — look at that one first`, 409);
+      if (publishing.has(player.id)) throw new AuctionError(`${player.name}'s photo is already being approved`, 409);
+      publishing.set(player.id, pending.path);
+      try {
+        const livePath = approvedPathFor(pending.path);
+        try {
+          await movePhoto(pending.path, livePath);
+        } catch (err) {
+          // A newer upload replaced this photo while the move failed: nothing
+          // points at it any more, so don't leave it behind in pending/.
+          const now = store.state.players.find((p) => p.id === player.id);
+          if (now?.pendingPhoto?.path !== pending.path) removePhoto(pending.path);
+          throw err;
+        }
+        const current = store.state.players.find((p) => p.id === player.id); // the roster may have changed meanwhile
+        if (!current) {
+          removePhoto(livePath);
+          throw new AuctionError(`${player.name} was removed from the pool`, 409);
+        }
+        const previous = mutate(null, 'photo', () => applyApprovedPhoto(current, pending.path, livePath),
+          () => `Approved ${current.name}'s new photo (sent from phone #${pending.device}) — it is on the screens now, and the link is closed`);
+        if (previous) removePhoto(previous);
+        res.json({ ok: true, photoUrl: photoUrlFor(livePath) });
+      } finally {
+        publishing.delete(player.id);
+      }
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/admin/players/:id/photo/reject', requireAdmin, (req, res) => {
+    const player = engine.getPlayer(store.state, req.params.id);
+    const path = str(req.body?.path, 'Photo', { max: 300 });
+    const pending = player.pendingPhoto;
+    if (!pending || pending.path !== path) {
+      throw new AuctionError('That photo is no longer waiting — it was already handled or replaced', 409);
+    }
+    if (publishing.has(player.id)) throw new AuctionError(`${player.name}'s photo is being approved right now`, 409);
+    // "Reject and replace the link": for a link someone else has got hold of.
+    // The player keeps the same time window on a new code, sent to them again.
+    // A closed link needs no replacing: it already takes nothing, and opening
+    // it again always makes a new code.
+    const linkOpen = photoLinkStatus(store.state, player, Date.now()) === 'open';
+    const replaceLink = req.body?.newLink === true && linkOpen;
+    mutate(null, 'photo', () => {
+      player.pendingPhoto = null;
+      if (replaceLink) player.photoCode = newPhotoCode();
+    }, () => `Rejected a photo sent on ${player.name}'s link from phone #${pending.device} — it never reached the screens${
+      replaceLink ? `; ${player.name}'s link was replaced, so the old one no longer works`
+        : linkOpen ? '; the link stays open until it expires' : ''}`);
+    removePhoto(pending.path);
+    res.json({ ok: true, newLink: replaceLink });
+  });
+
+  /** The organiser's own upload goes on the screens at once (no approval, no link needed). */
+  router.post('/admin/players/:id/photo', requireAdmin, rawImage, async (req, res, next) => {
+    try {
+      const player = engine.getPlayer(store.state, req.params.id);
+      const { body, kind } = imageFrom(req.body);
+      const objectPath = newPhotoPath('players', player.id, kind.ext);
+      await uploadPhoto(objectPath, body, kind.contentType);
+      const current = store.state.players.find((p) => p.id === player.id); // the roster may have changed meanwhile
+      if (!current) {
+        removePhoto(objectPath);
+        throw new AuctionError(`${player.name} was removed from the pool`, 409);
+      }
+      const previous = mutate(null, 'photo', () => {
+        const before = current.photoPath ?? null;
+        current.photoPath = objectPath;
+        return before;
+      }, () => `Organiser uploaded a new photo for ${current.name} (console #${deviceTagOf(req.session!.token)}) — it is on the screens now`);
+      if (previous && previous !== objectPath) removePhoto(previous);
+      res.json({ ok: true, photoUrl: photoUrlFor(objectPath) });
+    } catch (err) {
+      next(err);
+    }
   });
 
   router.post('/admin/teams', requireAdmin, (req, res) => {
@@ -479,12 +761,21 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     res.json({ ok: true });
   });
 
-  router.put('/admin/pin', requireAdmin, (req, res) => {
+  // Changing the PIN takes the current one (a borrowed or stolen console
+  // can't lock the organiser out), and signs every other console out.
+  router.put('/admin/pin', requireAdmin, pinAgainLimiter, (req, res) => {
+    const current = typeof req.body?.currentPin === 'string' ? req.body.currentPin.trim() : '';
+    if (!current || !safeEqual(current, getPin())) {
+      store.logEvent('auth', 'PIN change refused — wrong current PIN');
+      throw new AuctionError('Wrong current PIN — the PIN was not changed', 403);
+    }
     const pin = str(req.body?.pin, 'PIN', { max: 64 });
     if (pin.length < 4) throw new AuctionError('PIN must be at least 4 characters');
     setPin(pin);
-    store.logEvent('settings', 'Admin PIN changed');
-    res.json({ ok: true });
+    const signedOut = store.deleteAdminSessionsExcept(req.session!.token);
+    store.logEvent('settings', `Admin PIN changed${signedOut ? ` — ${signedOut} other console${signedOut === 1 ? '' : 's'} signed out` : ''}`);
+    if (signedOut) broadcast(); // the signed-out consoles find out at once and go back to sign-in
+    res.json({ ok: true, signedOut });
   });
 
   // =========================================================================
@@ -516,6 +807,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
           );
         }
         engine.openLot(store.state, p.id, Date.now());
+        store.audience.sync(store.state.lot);
         return p;
       },
       (p) => `${p.name} is up for auction (base ${engine.basePriceOf(store.state, p)} pts)`,
@@ -568,15 +860,26 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
       expectedTeamId: req.body?.expectedTeamId !== undefined ? str(req.body.expectedTeamId, 'Team') : undefined,
       expectedPrice: optionalInt(req.body?.expectedPrice, 'Expected price', { min: 0 }) ?? undefined,
     };
-    const result = mutate('Undo: sale', 'sale', () => engine.sellLot(store.state, Date.now(), guard),
-      (r) => `SOLD — ${r.player.name} to ${teamName(r.teamId)} for ${r.price} pts${timeoutNote()}`);
+    const result = mutate('Undo: sale', 'sale', () => {
+      const lotId = store.state.lot?.id;
+      const r = engine.sellLot(store.state, Date.now(), guard);
+      // The phones' guesses on this player are scored with the hammer.
+      store.state.guessResult = lotId && store.state.settings.audienceGame !== false
+        ? store.audience.settle(lotId, r.player.id, r.price)
+        : null;
+      return r;
+    }, (r) => `SOLD — ${r.player.name} to ${teamName(r.teamId)} for ${r.price} pts${timeoutNote()}`);
+    presenceChanged();
     res.json({ ok: true, playerId: result.player.id, teamId: result.teamId, price: result.price });
   });
 
   router.post('/admin/auction/unsold', requireAdmin, (req, res) => {
     const lotId = req.body?.lotId !== undefined ? str(req.body.lotId, 'Lot') : undefined;
-    const player = mutate('Undo: unsold', 'sale', () => engine.passLot(store.state, lotId, Date.now()),
-      (p) => `UNSOLD — ${p.name} (no bids)${timeoutNote()}`);
+    const player = mutate('Undo: unsold', 'sale', () => {
+      const p = engine.passLot(store.state, lotId, Date.now());
+      store.state.guessResult = null; // no hammer price to guess
+      return p;
+    }, (p) => `UNSOLD — ${p.name} (no bids)${timeoutNote()}`);
     res.json({ ok: true, playerId: player.id });
   });
 
@@ -601,6 +904,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     const snap = store.popUndo();
     if (!snap) throw new AuctionError('Nothing to undo');
     engine.restoreSnapshot(store.state, snap);
+    if (store.state.lot) store.audience.unsettle(store.state.lot.id);
     store.saveState();
     store.logEvent('undo', `Undid: ${snap.label.replace(/^Undo: /, '')}`);
     broadcast();
@@ -656,6 +960,7 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     requirePinAgain(req, 'Auction reset', 'nothing was reset');
     mutate(null, 'auction', () => {
       engine.resetAuction(store.state);
+      store.audience.clear();
       store.clearUndo();
     }, () => 'Auction reset — all sales cleared, pool restored (teams/players/settings kept)');
     res.json({ ok: true });
@@ -673,7 +978,11 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     // Keep versions monotonic so clients never mistake the reset for stale state.
     fresh.version = (store.state.version ?? 0) + 1;
     store.replaceState(fresh);
-    store.logEvent('system', 'Factory reset — restored the original DTC Season 3 seed');
+    store.audience.clear();
+    // A reset starts a new event: the old captains' phones are signed out
+    // (their teams' codes are new anyway).
+    store.deleteTeamSessions();
+    store.logEvent('system', 'Factory reset — restored the original DCT seed; every captain device was signed out');
     broadcast();
     res.json({ ok: true });
   });
@@ -686,8 +995,11 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
   router.get('/admin/export.csv', requireAdmin, (_req, res) => {
     const s = store.state;
     const esc = (v: unknown) => {
-      const t = v === null || v === undefined ? '' : String(v);
-      return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+      let t = v === null || v === undefined ? '' : String(v);
+      // A cell that starts like a formula (=, +, -, @, tab, CR) would run as one
+      // in Excel or Sheets; a leading apostrophe keeps it plain text.
+      if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+      return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
     };
     const lines: string[] = [];
     lines.push('RESULTS');
@@ -725,15 +1037,56 @@ export function createApi({ store, broadcast, getPin, setPin }: ApiDeps): Router
     requirePinAgain(req, 'Restore', 'nothing was restored');
     const body = req.body ?? {};
     const state = body.state as State | undefined;
-    if (!state || !Array.isArray(state.players) || !Array.isArray(state.teams) || !state.settings) {
-      throw new AuctionError('Not a valid backup file');
-    }
-    state.version = (store.state.version ?? 0) + 1;
-    store.replaceState(state);
+    const problem = backupProblem(state);
+    if (problem) throw new AuctionError(`Not a valid backup file: ${problem} — nothing was restored`);
+    state!.version = (store.state.version ?? 0) + 1;
+    store.replaceState(state!);
+    store.audience.clear();
     store.logEvent('system', 'State restored from a backup file');
     broadcast();
     res.json({ ok: true });
   });
+
+  /** Why a backup can't be restored, or null when it can. Beyond the shape
+   *  checks, it dry-runs everything a screen builds from state, so a file that
+   *  would crash every screen (or the server) is refused up front. */
+  function backupProblem(state: State | undefined): string | null {
+    const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+    if (!isObj(state) || !Array.isArray(state.players) || !Array.isArray(state.teams) || !isObj(state.settings)) {
+      return 'it has no players, teams or settings';
+    }
+    const s = state.settings;
+    if (!Array.isArray(s.tiers) || s.tiers.length === 0 || !Array.isArray(s.increments) || s.increments.length === 0) {
+      return 'its settings have no tiers or bid steps';
+    }
+    if (!['setup', 'live', 'accelerated', 'completed'].includes(state.stage)) return 'its stage is unknown';
+    const tierKeys = new Set(s.tiers.map((t) => t?.key));
+    const ids = new Set<string>();
+    for (const p of state.players) {
+      if (!isObj(p) || typeof p.id !== 'string' || !p.id || typeof p.name !== 'string' || ids.has(p.id)) return 'a player is malformed or listed twice';
+      if (!tierKeys.has(p.tierKey)) return `${p.name} is in a category the file doesn't have`;
+      if (!['available', 'sold', 'unsold'].includes(p.status)) return `${p.name} has an unknown status`;
+      if (p.photoPath != null && (typeof p.photoPath !== 'string' || p.photoPath.includes('..'))) return `${p.name} has a bad photo path`;
+      ids.add(p.id);
+    }
+    const teamIds = new Set<string>();
+    for (const t of state.teams) {
+      if (!isObj(t) || typeof t.id !== 'string' || typeof t.name !== 'string' || typeof t.code !== 'string' || !t.code) return 'a team is malformed';
+      teamIds.add(t.id);
+    }
+    if (state.players.some((p) => p.status === 'sold' && !teamIds.has(p.teamId ?? ''))) return 'a sold player belongs to a team the file doesn\'t have';
+    if (state.lot != null && (!isObj(state.lot) || !ids.has(state.lot.playerId) || !Array.isArray(state.lot.bids))) return 'its open lot is broken';
+    try {
+      const copy = JSON.parse(JSON.stringify(state)) as State;
+      ensurePhotoCodes(copy);
+      ensureTimeoutFields(copy);
+      publicState(copy, null);
+      engine.feasibilityWarnings(copy);
+    } catch (err) {
+      return `the app can't read it (${err instanceof Error ? err.message : 'unknown error'})`;
+    }
+    return null;
+  }
 
   // ---- error handling ----
   router.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

@@ -93,7 +93,9 @@ function SetupPanel({ state }: { state: StateView }) {
       <h2>Ready to start</h2>
       <p className="muted">
         {state.progress.total} players · {state.teams.length} teams · purse {fmt(state.settings.purse)} pts ·
-        squads {state.settings.minSquad}–{state.settings.maxSquad} ·
+        {state.settings.minSquad === state.settings.maxSquad
+          ? `squads of ${state.settings.minSquad} + captain`
+          : `squads ${state.settings.minSquad}–${state.settings.maxSquad} + captain`} ·
         increments {state.settings.increments.map((r) => `+${r.step}${r.upTo ? ` to ${fmt(r.upTo)}` : ' above'}`).join(', ')}
       </p>
       <p className="muted small">
@@ -482,7 +484,7 @@ function ResultsPanel({ state }: { state: StateView }) {
         {state.teams.map((t) => (
           <div key={t.id} className="result-team" style={{ borderColor: t.color }}>
             <h3 style={{ color: t.color }}>{t.name}</h3>
-            <div className="muted small">Capt. {t.captain} · spent {fmt(t.spent)} · left {fmt(t.remaining)}</div>
+            <div className="muted small">{t.captain ? `Capt. ${t.captain} · ` : ''}spent {fmt(t.spent)} · left {fmt(t.remaining)}</div>
             <ul>
               {state.players
                 .filter((p) => p.teamId === t.id && p.status === 'sold')

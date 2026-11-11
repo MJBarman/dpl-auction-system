@@ -497,6 +497,11 @@ label.check {
   cursor: pointer;
 }
 label.check:has(input:checked) { font-weight: 700; }
+/* a switch with a line of explanation under its name */
+label.audience-switch { align-items: flex-start; padding: 8px 0; }
+label.audience-switch input[type='checkbox'] { margin-top: 2px; }
+label.audience-switch > span { display: grid; gap: 2px; }
+label.audience-switch small { font: var(--ad-body-s); font-weight: 400; color: var(--ad-text-2); }
 label.check input[type='checkbox'] {
   flex: none;
   width: 24px; height: 24px; margin: 0;
@@ -1125,7 +1130,7 @@ nav.tabs .tab:focus-visible { outline-offset: -4px; }
   border: 1px dashed var(--ad-divider);
 }
 .table-scroll:has(tbody:empty)::after { content: 'No players match this filter.'; margin: 16px var(--card-pad) 0; }
-.card:has(.tab.active:nth-child(3)) .table-scroll:has(tbody:empty)::after { content: 'Your watchlist is empty. Tap the star next to a player to add them.'; }
+.card:has(.tab.active[data-filter='starred']) .table-scroll:has(tbody:empty)::after { content: 'Your watchlist is empty. Tap the star next to a player to add them.'; }
 .table-scroll:has(tbody:empty) .table thead { display: none; }
 
 
@@ -1246,6 +1251,105 @@ body:has(.hold-dock) .toast-stack { bottom: calc(96px + env(safe-area-inset-bott
 .photo-current .stack { flex: 1; min-width: 200px; }
 .photo-preview { margin: 24px 0; text-align: center; }
 .photo-preview img { display: block; margin: 0 auto; max-width: min(320px, 100%); border: 0; border-radius: 0; }
+.photo-deadline {
+  display: flex; align-items: center; gap: 8px;
+  margin: 16px 0 0; padding: 12px 16px;
+  font: var(--ad-body-s); font-weight: 700;
+  background: var(--ad-surface-alt);
+}
+.photo-closed { margin: 0; font: var(--ad-headline-s); letter-spacing: var(--ad-headline-s-track); text-transform: uppercase; }
+
+/* the organiser's photo approvals: a card in the corner of every console tab */
+.photo-review {
+  position: fixed; z-index: 70;
+  right: var(--gutter); bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+  width: min(380px, calc(100vw - 2 * var(--gutter)));
+  max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 0 16px 16px;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border-strong);
+  animation: riseIn var(--ad-dur) var(--ad-ease);
+}
+.photo-review-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 -16px 16px; padding: 4px 4px 4px 16px;
+  border-bottom: 1px solid var(--ad-divider);
+}
+.photo-review-title {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: var(--ad-eyebrow); letter-spacing: var(--ad-eyebrow-track); text-transform: uppercase;
+}
+.photo-review-head .btn.ghost { flex: none; width: 44px; min-height: 44px; padding: 0; }
+.photo-review-pair { display: flex; align-items: flex-end; gap: 16px; }
+.photo-review-pair figure { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.photo-review-pair figcaption {
+  font: var(--ad-label-caps); letter-spacing: var(--ad-label-caps-track); text-transform: uppercase;
+  color: var(--ad-text-2);
+}
+.photo-review-new a { display: block; line-height: 0; }
+.photo-review-new figcaption { color: var(--ad-text); font-weight: 700; }
+.photo-review-name {
+  margin: 16px 0 0;
+  font: var(--ad-headline-s); letter-spacing: var(--ad-headline-s-track); text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.photo-review > .muted.small { margin: 4px 0 0; }
+.photo-review-flag {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 12px 0 0; padding: 8px 12px;
+  font: var(--ad-body-s);
+  background: var(--ad-surface-alt);
+  border-left: 4px solid var(--ad-orange);
+}
+.photo-review > .row { margin: 16px 0 0; }
+.photo-review-replace {
+  display: block; width: 100%; min-height: 44px; margin: 4px 0 -8px; padding: 0;
+  font: var(--ad-body-s); color: var(--ad-text-2); text-decoration: underline; text-underline-offset: 3px;
+  background: none; border: 0; cursor: pointer;
+}
+.photo-review-replace:disabled { cursor: not-allowed; opacity: .5; }
+.photo-review-replace:focus-visible { outline: 1px dashed var(--ad-focus); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .photo-review-replace:hover:not(:disabled) { color: var(--ad-text); } }
+.photo-review-pill {
+  position: fixed; z-index: 70;
+  right: var(--gutter); bottom: max(16px, calc(env(safe-area-inset-bottom) + 8px));
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: var(--ad-size-button-l); padding: 0 16px;
+  font: var(--ad-button);
+  color: var(--ad-on-inverse); background: var(--ad-inverse);
+  border: 0; border-radius: 0;
+  cursor: pointer;
+  animation: riseIn var(--ad-dur) var(--ad-ease);
+}
+.photo-review-pill:focus-visible { outline: 1px dashed var(--ad-focus); outline-offset: 4px; }
+@media (max-width: 599px) {
+  /* a bottom sheet on phones */
+  .photo-review { left: 0; right: 0; bottom: 0; width: auto; border-width: 1px 0 0; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .photo-review .player-photo.lg { width: 120px; height: 120px; font-size: 42px; }
+}
+
+/* Admin → Players → Photo links */
+.modal.wide { width: min(780px, 100%); }
+.photo-links-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin: 16px 0; }
+.photo-links-bar > label { flex: 1 1 180px; }
+.photo-links-bar > .btn { flex: 0 1 auto; }
+.photo-links { list-style: none; margin: 0 -24px; padding: 0; border-top: 1px solid var(--ad-divider); }
+.photo-links > li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 8px 24px;
+  border-bottom: 1px solid var(--ad-divider);
+}
+.photo-links-who { display: flex; flex: 1 1 200px; flex-direction: column; min-width: 0; }
+.photo-links-who b { overflow-wrap: anywhere; }
+.photo-links-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; margin-left: auto; }
+.photo-links-actions:empty { display: none; }
+.photo-links-pending { color: var(--ad-text); font-weight: 700; }
+/* phone sheets pad 16px, not 24px: the list still runs edge to edge */
+@media (max-width: 640px) {
+  .photo-links { margin: 0 -16px; }
+  .photo-links > li { padding: 8px 16px; }
+}
+.photo-box .row.wrap { margin-top: 8px; }
 
 
 /* =============================================================================
