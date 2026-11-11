@@ -56,7 +56,7 @@ export default function TeamPage() {
           <div>
             <div className="brand">{team.name}</div>
             <div className="muted small">
-              {team.captain ? `Capt. ${team.captain} — ` : ''}your private dashboard
+              {team.captain ? <><span className="topbar-capt">Capt. {team.captain}</span> — </> : ''}your private dashboard
               {you.role === 'team' && you.deviceTag ? ` · device #${you.deviceTag}` : ''}
             </div>
           </div>

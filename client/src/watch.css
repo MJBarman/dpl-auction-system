@@ -116,8 +116,14 @@
 }
 .w-score-team.leading::after { transform: scaleX(1); }
 .w-score-name {
-  font: 700 13px/16px var(--ad-font-heading); letter-spacing: 1.5px; text-transform: uppercase;
+  font: 700 13px/16px var(--ad-font-heading); letter-spacing: .115em; text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* useFit shrinks a long name (the tracking shrinks with it); one still too
+   long at 11px goes onto two balanced lines rather than losing its end */
+.w-score-name.w-fit-break {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  line-height: 13px; text-wrap: balance;
 }
 .w-score-team.mine .w-score-name::before {
   content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px;
@@ -507,6 +513,10 @@
 .w-feed-who { flex: 1; min-width: 0; display: grid; }
 .w-feed-who b { font: 700 16px/20px var(--ad-font-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .w-feed-who span, .w-feed-price span { font: 400 12px/16px var(--ad-font-body); color: var(--ad-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* "Team · 1.5× base · 2 bids": the note gives way long before the team's name does */
+.w-feed-sub { display: flex; min-width: 0; }
+.w-feed-sub > span { flex: 0 1 auto; min-width: 0; }
+.w-feed-sub > .w-feed-note { flex-shrink: 1000; }
 .w-feed-price { flex: none; display: grid; justify-items: end; }
 .w-feed-price b { font: 800 20px/1 var(--ad-font-heading); }
 .w-feed-unsold { color: var(--ad-text-2); }
@@ -516,9 +526,10 @@
 .w-squad-nav { position: sticky; top: var(--w-head); z-index: 20; display: flex; background: var(--ad-page); border-bottom: 1px solid var(--ad-divider); }
 .w-squad-nav button {
   flex: 1; min-width: 0; min-height: 48px; padding: 3px 12px 0;
-  font: 700 14px/1 var(--ad-font-heading); letter-spacing: 1.5px; text-transform: uppercase;
+  font: 700 14px/1.1 var(--ad-font-heading); letter-spacing: 1.5px; text-transform: uppercase;
   color: var(--ad-text-2); background: none; border: 0; border-bottom: 3px solid transparent;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* a long team name takes a second line (two fit in the 48px) rather than losing its end */
+  overflow-wrap: anywhere; text-wrap: balance;
   cursor: pointer;
   transition: color var(--ad-dur-fast) var(--ad-ease), border-color var(--ad-dur-fast) var(--ad-ease);
 }
@@ -945,6 +956,10 @@
   .w-score-name { flex: 1; min-width: 0; }
   .w-score-purse { font-size: 22px; }
   .w-score-team::after { bottom: auto; top: -1px; }
+  /* in a cramped half of the strip the squad squares give way, so the name
+     keeps the room (the n/10 count stays) */
+  .w-score-team { container-type: inline-size; }
+  @container (max-width: 380px) { .w-score-meta .w-pips { display: none; } }
 
   .w-page[data-view='lot'][data-tab='live'] .w-main { display: flex; flex-direction: column; }
   .w-page[data-view='lot'][data-tab='live'] .w-ticker,

@@ -351,6 +351,14 @@ function Watch() {
 
 /* ---------------- scoreboard: every team's purse and squad, always in view ---------------- */
 
+/** A team's name on the scoreboard, always in full: it shrinks to fit its
+ *  half of the board, and only a name still too long at 11px takes a second
+ *  line. Following a team adds a marker in front, so that refits it too. */
+function ScoreName({ name, mine }: { name: string; mine: boolean }) {
+  const ref = useFit<HTMLSpanElement>(mine ? `${name}\u0000mine` : name, 11);
+  return <span ref={ref} className="w-score-name">{name}</span>;
+}
+
 function Scoreboard({ state, leadingId, follow, onPick }: {
   state: StateView;
   leadingId: string | null;
@@ -398,7 +406,7 @@ function Scoreboard({ state, leadingId, follow, onPick }: {
           onClick={() => onPick(t.id)}
           aria-label={`${t.name}: ${fmt(t.remaining)} points left, ${t.count} of ${max} bought. Open the squad`}
         >
-          <span className="w-score-name">{t.name}</span>
+          <ScoreName name={t.name} mine={t.id === follow} />
           <span className="w-score-purse">
             <Odometer value={t.remaining} />
             {deltas[t.id] && (

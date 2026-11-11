@@ -626,7 +626,10 @@ export function Feed({ state, lot, history, follow, onShare, onPlayer }: {
                   <PlayerPhoto url={h.player.photoUrl} name={h.player.name} size="sm" />
                   <span className="w-feed-who">
                     <b>{h.player.name}</b>
-                    <span>{h.team.name}{saleNote(h.player) ? ` · ${saleNote(h.player)}` : ''}</span>
+                    <span className="w-feed-sub">
+                      <span>{h.team.name}</span>
+                      {saleNote(h.player) && <span className="w-feed-note">{`\u00a0· ${saleNote(h.player)}`}</span>}
+                    </span>
                   </span>
                   <span className="w-feed-price">
                     <b>{fmt(h.player.price)}</b>
