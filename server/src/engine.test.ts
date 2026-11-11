@@ -62,17 +62,36 @@ function randomAuction(s: State, seed: number): void {
   engine.completeAuction(s); // throws if anyone is short or unsold
 }
 
-// ---- DCT seed: the organiser's list of 22 ---------------------------------------
+// ---- DCT seed: the organiser's list of 22, minus the two captains ---------------
 
-test('DCT pool: the organiser\'s 22 players, in their order and spelling', () => {
+const ORGANISER_LIST = [
+  'Jishnu', 'Manash', 'Madhurjya', 'Kaustav', 'Kabya', 'Rohan', 'Ashish', 'Saurabh',
+  'Angshu', 'Uddhab', 'Binit', 'Amit', 'Asif', 'Chinmoy Sr', 'Ronny', 'Debanga',
+  'Chinmoy Jr', 'Hirak Jr', 'Rahul', 'Amlan', 'Sonu', 'Bhokto',
+];
+
+/** A database from the first DCT seed (live 11 Nov 2026, before the captains
+ *  were named): all 22 in the pool, "Team 1"/"Team 2", no captains. */
+function firstDctSeed(): State {
   const s = buildInitialState();
-  assert.deepEqual(s.players.map((p) => p.name), [
-    'Jishnu', 'Manash', 'Madhurjya', 'Kaustav', 'Kabya', 'Rohan', 'Ashish', 'Saurabh',
-    'Angshu', 'Uddhab', 'Binit', 'Amit', 'Asif', 'Chinmoy Sr', 'Ronny', 'Debanga',
-    'Chinmoy Jr', 'Hirak Jr', 'Rahul', 'Amlan', 'Sonu', 'Bhokto',
-  ]);
-  assert.ok(s.players.every((p, i) => p.id === `dct-p${i + 1}`), 'dct- ids keep photo folders apart from DPL and DTC 3');
-  assert.equal(new Set(s.players.map((p) => p.photoCode)).size, 22, 'every player has their own photo code');
+  const template = s.players[0];
+  s.players = ORGANISER_LIST.map((name, i) => s.players.find((p) => p.name === name)
+    ?? { ...structuredClone(template), id: `dct-p${i + 1}`, name, photoCode: `CAPTAIN${i + 1}` });
+  s.teams[0].name = 'Team 1';
+  s.teams[1].name = 'Team 2';
+  for (const t of s.teams) t.captain = '';
+  s.migrations = [];
+  return s;
+}
+
+test('DCT pool: the organiser\'s list in its order and spelling, without the two captains', () => {
+  const s = buildInitialState();
+  const pool = ORGANISER_LIST.filter((n) => n !== 'Saurabh' && n !== 'Angshu');
+  assert.deepEqual(s.players.map((p) => p.name), pool);
+  assert.equal(s.players.length, 20);
+  assert.deepEqual(s.players.map((p) => p.id), pool.map((n) => `dct-p${ORGANISER_LIST.indexOf(n) + 1}`),
+    'ids follow the list of 22 (dct-p8 and dct-p9 unused), so no photo folder shifts');
+  assert.equal(new Set(s.players.map((p) => p.photoCode)).size, 20, 'every player has their own photo code');
   assert.ok(s.players.every((p) => !/pay|\*|\(/i.test(p.name)), 'no "to pay" notes or stars in the names');
 });
 
@@ -94,9 +113,12 @@ test('DCT players start uncategorised (drawn last, base 200), with no stats, rol
   ]);
 });
 
-test('DCT teams: two teams whose names and captains come later', () => {
+test('DCT teams: Team Maka Bharosa (capt. Angshuman) and Team Badmash Brigade (capt. Saurav)', () => {
   const s = buildInitialState();
-  assert.deepEqual(s.teams.map((t) => [t.id, t.name, t.captain, t.owner]), [['t1', 'Team 1', '', ''], ['t2', 'Team 2', '', '']]);
+  assert.deepEqual(s.teams.map((t) => [t.id, t.name, t.captain, t.owner]), [
+    ['t1', 'Team Maka Bharosa', 'Angshuman', ''],
+    ['t2', 'Team Badmash Brigade', 'Saurav', ''],
+  ]);
   assert.notEqual(s.teams[0].code, s.teams[1].code);
 });
 
@@ -111,18 +133,17 @@ test('DCT settings: 11 a side (10 bought + the captain) from a 30,000 purse', ()
   for (const t of s.teams) assert.equal(engine.teamSummary(s, t.id).remaining, 30000);
 });
 
-test('DCT: until the two captains leave the pool, the console warns that 2 players cannot be sold', () => {
+test('DCT: 20 players fill two squads of 10 exactly, so the console shows no pool warning', () => {
   const s = buildInitialState();
-  assert.deepEqual(engine.feasibilityWarnings(s), [
-    'Pool has 22 players but 2 teams × max 10 caps at 20. 2 player(s) cannot be sold — take any captains out of the pool, trim it, or raise the maximum squad.',
-  ]);
-  s.players = s.players.filter((p) => p.name !== 'Rohan' && p.name !== 'Amit'); // any two names
   assert.deepEqual(engine.feasibilityWarnings(s), [], '20 players for two squads of 10');
+  s.players.push({ ...s.players[0], id: 'p-extra', name: 'Extra' });
+  assert.deepEqual(engine.feasibilityWarnings(s), [
+    'Pool has 21 players but 2 teams × max 10 caps at 20. 1 player(s) cannot be sold — take any captains out of the pool, trim it, or raise the maximum squad.',
+  ]);
 });
 
 test('DCT: while everyone is uncategorised, a fresh team can bid 30,000 − 9 × 200 = 28,200', () => {
   const s = buildInitialState();
-  s.players = s.players.slice(0, 20);
   engine.startAuction(s);
   for (const t of s.teams) assert.equal(engine.teamSummary(s, t.id).maxBid, 28200);
   open(s, s.players[0].id);
@@ -134,7 +155,6 @@ test('DCT: while everyone is uncategorised, a fresh team can bid 30,000 − 9 ×
 test('DCT: random auctions of the 20 always finish with two squads of 10, categorised or not', () => {
   for (let run = 0; run < 60; run++) {
     const s = buildInitialState();
-    s.players = s.players.slice(0, 20);
     if (run % 2) {
       // Categorised the way an organiser might: 2 Diamond, 4 Gold, 8 Emerald, 6 New.
       const keys = ['diamond', 'diamond', 'gold', 'gold', 'gold', 'gold', ...Array(8).fill('emerald'), ...Array(6).fill('new')];
@@ -153,8 +173,55 @@ test('no data migrations are pending on a fresh DCT seed, and a DTC 3 database\'
   assert.equal(applyDataMigrations(buildInitialState()), false);
   const old = dtc3State();
   old.migrations = ['dtc3-season-ranks-hot-list', 'dtc3-team-owners'];
-  assert.equal(applyDataMigrations(old), false);
-  assert.deepEqual(old.migrations, ['dtc3-season-ranks-hot-list', 'dtc3-team-owners']);
+  const before = JSON.stringify({ teams: old.teams, players: old.players });
+  applyDataMigrations(old);
+  assert.equal(JSON.stringify({ teams: old.teams, players: old.players }), before, 'its teams and players are untouched');
+});
+
+test('a database from the first DCT seed gets the team names and captains, and the two captains leave the pool', () => {
+  const s = firstDctSeed();
+  const codes = s.teams.map((t) => t.code);
+  s.watchlists = { t1: { 'dct-p9': { playerId: 'dct-p9', starred: true, targetPrice: null, note: '' } } };
+  assert.equal(s.players.length, 22);
+  assert.equal(applyDataMigrations(s), true);
+  assert.deepEqual(s.teams.map((t) => [t.name, t.captain]), [['Team Maka Bharosa', 'Angshuman'], ['Team Badmash Brigade', 'Saurav']]);
+  assert.deepEqual(s.teams.map((t) => t.code), codes, 'join codes are kept');
+  assert.deepEqual(s.players.map((p) => p.id), buildInitialState().players.map((p) => p.id), 'the same pool, with the same ids, as a fresh seed');
+  assert.deepEqual(s.watchlists.t1, {}, 'a watchlist entry for a captain goes with him');
+  assert.deepEqual(engine.feasibilityWarnings(s), []);
+  const p = factoryResetPreview(s);
+  assert.deepEqual([p.playersRemoved, p.playersAdded, p.playersEdited, p.teamsChanged], [[], [], [], []], 'nothing differs from a fresh seed');
+  assert.equal(applyDataMigrations(s), false, 'it runs once');
+});
+
+test('the captains update leaves alone whatever the organiser already changed, and sold or started auctions', () => {
+  // A team the organiser named (in either order) keeps its name and gets no captain from the seed.
+  const s = firstDctSeed();
+  Object.assign(s.teams[0], { name: 'Team Badmash Brigade', captain: '' });
+  s.teams[1].name = 'Underdogs';
+  applyDataMigrations(s);
+  assert.deepEqual(s.teams.map((t) => [t.name, t.captain]), [['Team Badmash Brigade', ''], ['Underdogs', '']]);
+  // A team already given the new name gets its captain if the box is empty; a typed captain stays.
+  const named = firstDctSeed();
+  named.teams[0].name = 'Team Maka Bharosa';
+  named.teams[1].captain = 'Saurav B.';
+  applyDataMigrations(named);
+  assert.deepEqual(named.teams.map((t) => [t.name, t.captain]), [['Team Maka Bharosa', 'Angshuman'], ['Team Badmash Brigade', 'Saurav B.']]);
+  // Once the auction has started, nobody leaves the pool.
+  const live = firstDctSeed();
+  engine.startAuction(live);
+  applyDataMigrations(live);
+  assert.equal(live.players.length, 22);
+  // A captain who was sold, is on the block, or was renamed is kept.
+  const busy = firstDctSeed();
+  Object.assign(busy.players.find((p) => p.id === 'dct-p8')!, { status: 'sold', teamId: 't1', price: 500 });
+  busy.lot = { id: 'lot-1', playerId: 'dct-p9', bids: [], openedAt: 1 };
+  applyDataMigrations(busy);
+  assert.deepEqual(busy.players.filter((p) => p.id === 'dct-p8' || p.id === 'dct-p9').map((p) => p.name), ['Saurabh', 'Angshu']);
+  const renamed = firstDctSeed();
+  renamed.players.find((p) => p.id === 'dct-p9')!.name = 'Angshuman';
+  applyDataMigrations(renamed);
+  assert.deepEqual(renamed.players.filter((p) => p.id === 'dct-p8' || p.id === 'dct-p9').map((p) => p.name), ['Angshuman']);
 });
 
 test('factory-reset preview: a fresh seed loses nothing beyond the codes', () => {
@@ -172,7 +239,7 @@ test('factory-reset preview lists every result, upload, edit and setting the res
   playerByName(s, 'Rahul').status = 'unsold';
   playerByName(s, 'Kaustav').photoPath = 'players/dct-p4/123.jpg'; // uploaded after the seed
   playerByName(s, 'Asif').tierKey = 'gold'; // categorised
-  s.players = s.players.filter((p) => p.name !== 'Rohan'); // named captain, out of the pool
+  s.players = s.players.filter((p) => p.name !== 'Rohan'); // taken out of the pool
   s.players.push({ ...playerByName(s, 'Amit'), id: 'p-new', name: 'Guest' });
   Object.assign(s.teams[1], { name: 'Underdogs', captain: 'Rohan' });
   s.settings.purse = 25000;
@@ -186,7 +253,7 @@ test('factory-reset preview lists every result, upload, edit and setting the res
   assert.deepEqual(p.playersEdited, ['Asif']);
   assert.deepEqual(p.playersRemoved, ['Rohan']);
   assert.deepEqual(p.playersAdded, ['Guest']);
-  assert.deepEqual(p.teamsChanged, ['Underdogs goes back to Team 2']);
+  assert.deepEqual(p.teamsChanged, ['Underdogs goes back to Team Badmash Brigade (capt. Saurav)']);
   assert.deepEqual(p.settingsChanged, [
     'Purse per team: 25,000 → 30,000',
     'Bid increments: +100 to 1,000 · +200 to 3,000 · +500 above → +100 to 1,000 · +200 to 3,000 · +250 above',

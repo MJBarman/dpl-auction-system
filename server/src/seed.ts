@@ -1,11 +1,12 @@
 import { FactoryResetPreview, Player, Settings, State, Team } from './types';
 
 // Seeded for the DCT (Downtown Champions Trophy) auction from the organiser's
-// list of 22 players. Two of them become the captains and come out of the pool
-// once named, leaving 20 for two teams of 11 (10 bought at auction + the
-// captain). The team names, the captains and each player's category come
-// later, from the admin console: until then everyone sits in "Uncategorised",
-// which is drawn last. No stats, roles or hot list yet.
+// list of 22 players. Two of them are the captains — Angshuman ("Angshu" on
+// the list) leads Team Maka Bharosa and Saurav ("Saurabh") leads Team Badmash
+// Brigade — so they bid instead of being sold, leaving 20 for two teams of 11
+// (10 bought at auction + the captain). Each player's category comes later,
+// from the admin console: until then everyone sits in "Uncategorised", which
+// is drawn last. No stats, roles or hot list yet.
 // Everything here is editable from the admin console after first boot.
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -46,19 +47,32 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
 };
 
-// Names, owners and captains to come: the organiser fills them in under Teams.
+// The organiser's names for the teams and their captains (no owners named).
 const TEAM_SEED: Omit<Team, 'code'>[] = [
-  { id: 't1', name: 'Team 1', captain: '', owner: '', color: '#f43f5e' },
-  { id: 't2', name: 'Team 2', captain: '', owner: '', color: '#3b82f6' },
+  { id: 't1', name: 'Team Maka Bharosa', captain: 'Angshuman', owner: '', color: '#f43f5e' },
+  { id: 't2', name: 'Team Badmash Brigade', captain: 'Saurav', owner: '', color: '#3b82f6' },
 ];
 
-// The organiser's list, in its order and spelling (its "to pay" notes and
-// star marks left out, as asked).
-export const PLAYER_NAMES: readonly string[] = [
+// The organiser's list of 22, in its order and spelling (its "to pay" notes and
+// star marks left out, as asked). Ids follow this list, so they never shift.
+const ORGANISER_LIST: readonly string[] = [
   'Jishnu', 'Manash', 'Madhurjya', 'Kaustav', 'Kabya', 'Rohan', 'Ashish', 'Saurabh',
   'Angshu', 'Uddhab', 'Binit', 'Amit', 'Asif', 'Chinmoy Sr', 'Ronny', 'Debanga',
   'Chinmoy Jr', 'Hirak Jr', 'Rahul', 'Amlan', 'Sonu', 'Bhokto',
 ];
+
+// The two captains on that list: they bid for their teams, so they are not in
+// the pool. Their ids (dct-p8, dct-p9) stay unused, so every other player keeps
+// the id — and the photo folder — they had while the pool was 22.
+const CAPTAINS_ON_LIST: readonly { id: string; name: string }[] = [
+  { id: 'dct-p8', name: 'Saurabh' },
+  { id: 'dct-p9', name: 'Angshu' },
+];
+
+/** The auction pool: the organiser's list without the captains. */
+export const PLAYER_SEED: readonly { id: string; name: string }[] = ORGANISER_LIST
+  .map((name, i) => ({ id: `dct-p${i + 1}`, name }))
+  .filter((p) => !CAPTAINS_ON_LIST.some((c) => c.id === p.id));
 
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
 
@@ -178,7 +192,33 @@ export function ensureTimeoutFields(state: State): boolean {
  *  so none re-applies over later admin edits; a fresh seed is born with all of
  *  them recorded. The DTC 3 top-ups that lived here retired with the switch to
  *  DCT: a DTC 3 database moves to the DCT list by a factory reset. */
-const DATA_MIGRATIONS: { id: string; run: (state: State) => void }[] = [];
+const DATA_MIGRATIONS: { id: string; run: (state: State) => void }[] = [
+  {
+    // The captains were named after the first DCT seed went live (11 Nov
+    // 2026). A database from that seed gets the team names and captains — only
+    // where the seed's "Team 1"/"Team 2" and blank captain are untouched — and
+    // loses the two captains from the pool, matched by id AND name, and only
+    // before the auction starts and while they are still unsold and off the
+    // block. Anything an organiser already changed stays as it is.
+    id: 'dct-captains-named',
+    run: (state) => {
+      const firstSeedName: Record<string, string> = { t1: 'Team 1', t2: 'Team 2' };
+      for (const src of TEAM_SEED) {
+        const t = state.teams.find((x) => x.id === src.id);
+        if (!t) continue;
+        if (t.name === firstSeedName[src.id]) t.name = src.name;
+        if (t.name === src.name && !t.captain) t.captain = src.captain;
+      }
+      if (state.stage !== 'setup') return;
+      for (const c of CAPTAINS_ON_LIST) {
+        const p = state.players.find((x) => x.id === c.id);
+        if (!p || p.name !== c.name || p.status !== 'available' || state.lot?.playerId === p.id) continue;
+        state.players = state.players.filter((x) => x !== p);
+        for (const wl of Object.values(state.watchlists ?? {})) delete wl[p.id];
+      }
+    },
+  },
+];
 
 /** Apply the data migrations this state hasn't had yet. Returns true when any
  *  ran and the state should be re-persisted. */
@@ -196,11 +236,11 @@ export function applyDataMigrations(state: State): boolean {
 
 export function buildInitialState(): State {
   const teams: Team[] = TEAM_SEED.map((t) => ({ ...t, code: generateCode() }));
-  const players: Player[] = PLAYER_NAMES.map((name, i) => ({
+  const players: Player[] = PLAYER_SEED.map(({ id, name }) => ({
     // Photos upload to players/<id>/… in the bucket, which still holds the DPL
     // (p1…p31) and DTC 3 (dtc3-p1…p24) folders — the "dct-" prefix keeps them
     // apart (scripts/relink-photos.mjs matches folders to players by id).
-    id: `dct-p${i + 1}`,
+    id,
     name,
     role: '',
     tierKey: 'uncategorised',
